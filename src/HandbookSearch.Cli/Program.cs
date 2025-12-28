@@ -141,4 +141,5 @@ static IHostBuilder CreateHostBuilder() =>
 
             // Business Services
             services.AddScoped<IDocumentImportService, DocumentImportService>();
+            services.AddScoped<ISearchService, SearchService>();
         });
