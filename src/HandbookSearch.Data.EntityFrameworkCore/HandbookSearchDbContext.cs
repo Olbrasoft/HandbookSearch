@@ -12,8 +12,14 @@ public class HandbookSearchDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        // Enable pgvector extension
-        modelBuilder.HasPostgresExtension("vector");
+        // Check if using PostgreSQL provider
+        var isPostgreSQL = Database.IsNpgsql();
+
+        if (isPostgreSQL)
+        {
+            // Enable pgvector extension (PostgreSQL only)
+            modelBuilder.HasPostgresExtension("vector");
+        }
 
         modelBuilder.Entity<Document>(entity =>
         {
@@ -22,18 +28,29 @@ public class HandbookSearchDbContext : DbContext
             // Unique constraint on file path
             entity.HasIndex(e => e.FilePath).IsUnique();
 
-            // HNSW index for cosine similarity search
-            entity.HasIndex(e => e.Embedding)
-                .HasMethod("hnsw")
-                .HasOperators("vector_cosine_ops")
-                .HasStorageParameter("m", 16)
-                .HasStorageParameter("ef_construction", 64);
+            if (isPostgreSQL)
+            {
+                // HNSW index for cosine similarity search (PostgreSQL only)
+                entity.HasIndex(e => e.Embedding)
+                    .HasMethod("hnsw")
+                    .HasOperators("vector_cosine_ops")
+                    .HasStorageParameter("m", 16)
+                    .HasStorageParameter("ef_construction", 64);
 
-            // Timestamps
-            entity.Property(e => e.CreatedAt)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP");
-            entity.Property(e => e.UpdatedAt)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+                // Timestamps with PostgreSQL default
+                entity.Property(e => e.CreatedAt)
+                    .HasDefaultValueSql("CURRENT_TIMESTAMP");
+                entity.Property(e => e.UpdatedAt)
+                    .HasDefaultValueSql("CURRENT_TIMESTAMP");
+            }
+            else
+            {
+                // For InMemory and other providers, use .NET defaults
+                entity.Property(e => e.CreatedAt)
+                    .HasDefaultValueSql("GETDATE()");
+                entity.Property(e => e.UpdatedAt)
+                    .HasDefaultValueSql("GETDATE()");
+            }
         });
     }
 
