@@ -13,6 +13,10 @@
 
 # User secrets
 secrets.json
+appsettings.*.local.json
+*.env
+*.env.local
+*.env.production
 
 # Test results
 TestResults/
