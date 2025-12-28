@@ -82,31 +82,43 @@ dotnet build
 
 ### Database Setup
 
+The database `handbook_search` with pgvector extension has been created and is ready to use.
+
+**Verify database:**
 ```bash
-# Create database
-createdb handbook_search
+psql -U postgres -d handbook_search -c "SELECT extname, extversion FROM pg_extension WHERE extname = 'vector';"
+```
 
-# Enable pgvector extension
-psql -d handbook_search -c "CREATE EXTENSION IF NOT EXISTS vector;"
-
-# Run migrations (when implemented)
+**Run migrations** (when implemented):
+```bash
 cd src/HandbookSearch.Data.EntityFrameworkCore
 dotnet ef database update
 ```
 
 ### Configuration
 
-**Development** - Use User Secrets:
+**Local Development** - Use User Secrets:
 
 ```bash
 cd src/HandbookSearch.Cli
 dotnet user-secrets init
-dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Database=handbook_search;Username=postgres;Password=YourPassword"
+dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Database=handbook_search;Username=postgres"
 dotnet user-secrets set "Ollama:BaseUrl" "http://localhost:11434"
 dotnet user-secrets set "Ollama:Model" "nomic-embed-text"
 ```
 
-**Production** - Use environment variables (see [Secrets Management](https://github.com/Olbrasoft/engineering-handbook/blob/main/development-guidelines/secrets-management.md))
+**Note:** Local PostgreSQL runs without password. If your setup requires a password, add `;Password=YourPassword` to the connection string.
+
+**Production** - Use environment variables:
+
+Copy `handbook-search.env.example` to `~/.config/systemd/user/handbook-search.env` and configure:
+
+```bash
+cp handbook-search.env.example ~/.config/systemd/user/handbook-search.env
+# Edit the file with your production values
+```
+
+See [Secrets Management Guide](https://github.com/Olbrasoft/engineering-handbook/blob/main/development-guidelines/secrets-management.md) for details.
 
 ### Import Handbook Documents
 

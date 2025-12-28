@@ -152,37 +152,51 @@ See [SOLID Principles](https://github.com/Olbrasoft/engineering-handbook/blob/ma
 
 ```bash
 dotnet user-secrets init
-dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Database=handbook_search;Username=postgres;Password=DevPass123"
+dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Database=handbook_search;Username=postgres"
 dotnet user-secrets set "Ollama:BaseUrl" "http://localhost:11434"
+dotnet user-secrets set "Ollama:Model" "nomic-embed-text"
 ```
+
+**Note:** Local PostgreSQL runs without password. Add `;Password=YourPassword` only if your setup requires it.
 
 ### Production (Environment Variables)
 
+Use `handbook-search.env.example` as template:
+
 ```bash
-export ConnectionStrings__DefaultConnection="Host=localhost;Database=handbook_search;Username=postgres;Password=ProdPass456"
-export Ollama__BaseUrl="http://localhost:11434"
+cp handbook-search.env.example ~/.config/systemd/user/handbook-search.env
+```
+
+Example content:
+```bash
+ConnectionStrings__DefaultConnection=Host=localhost;Database=handbook_search;Username=postgres
+Ollama__BaseUrl=http://localhost:11434
+Ollama__Model=nomic-embed-text
 ```
 
 ### GitHub Actions (Secrets)
 
-Repository secrets:
-- `POSTGRES_PASSWORD` - PostgreSQL password
-- `OLLAMA_BASE_URL` - Ollama API URL
+Repository secrets (for CI/CD with self-hosted runner):
+- `OLLAMA_BASE_URL` - Ollama API URL (http://localhost:11434)
+
+**Note:** No PostgreSQL password needed for local development environment.
 
 See [Secrets Management Guide](https://github.com/Olbrasoft/engineering-handbook/blob/main/development-guidelines/secrets-management.md)
 
 ## Database
 
+Database `handbook_search` is created with pgvector extension enabled (v0.8.0).
+
 ### Connection String Format
 
-**Development:**
+**Local Development (no password):**
 ```
-Host=localhost;Database=handbook_search;Username=postgres;Password=xxx
+Host=localhost;Database=handbook_search;Username=postgres
 ```
 
-**Production:**
+**With password (if needed):**
 ```
-Host=localhost;Database=handbook_search;Username=postgres;Password=xxx
+Host=localhost;Database=handbook_search;Username=postgres;Password=YourPassword
 ```
 
 ### Migrations
