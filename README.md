@@ -35,6 +35,7 @@ HandbookSearch provides semantic search capabilities over the Olbrasoft engineer
 | Layer | Project | Purpose |
 |-------|---------|---------|
 | API | `HandbookSearch.AspNetCore.Api` | Search endpoint, Swagger |
+| Web UI | `HandbookSearch.Web` | Simple HTML/JS search interface |
 | Business | `HandbookSearch.Business` | Services (Import, Search, Embedding) |
 | Data | `HandbookSearch.Data` | Entities, DTOs, interfaces |
 | Data (EF) | `HandbookSearch.Data.EntityFrameworkCore` | DbContext, migrations, pgvector |
@@ -160,6 +161,34 @@ curl "http://localhost:5000/api/search?q=jak používat git branches&limit=5"
   ]
 }
 ```
+
+### Web UI
+
+**Start the web interface:**
+
+```bash
+# Terminal 1: Start API server
+cd src/HandbookSearch.AspNetCore.Api
+dotnet run
+
+# Terminal 2: Start web UI
+cd src/HandbookSearch.Web
+python3 -m http.server 3000
+```
+
+**Open in browser:**
+```
+http://localhost:3000
+```
+
+**Features:**
+- Search in Czech or English
+- Clickable links to GitHub files
+- Color-coded similarity scores
+- Copy file paths to clipboard
+- Responsive design
+
+See [Web UI README](src/HandbookSearch.Web/README.md) for details.
 
 ### CLI Commands
 

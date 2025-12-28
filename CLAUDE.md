@@ -18,6 +18,8 @@ dotnet test
 
 | Layer | Project | Purpose |
 |-------|---------|---------|
+| API | HandbookSearch.AspNetCore.Api | Search endpoint, Swagger |
+| Web UI | HandbookSearch.Web | Simple HTML/JS search interface |
 | Data | HandbookSearch.Data | Entities, DTOs, interfaces |
 | Data (EF) | HandbookSearch.Data.EntityFrameworkCore | DbContext, migrations, pgvector |
 | Business | HandbookSearch.Business | Services (Import, Search, Embedding) |
