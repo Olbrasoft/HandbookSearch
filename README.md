@@ -200,6 +200,25 @@ dotnet run -- import-all --path ~/GitHub/Olbrasoft/engineering-handbook
 dotnet run -- import-files --files "workflow/git-workflow.md,testing/unit-testing.md"
 ```
 
+### Automatic Updates
+
+**GitHub Actions workflow** automatically updates embeddings when markdown files change in engineering-handbook:
+
+📍 **Workflow Location:** [engineering-handbook/.github/workflows/update-embeddings.yml](https://github.com/Olbrasoft/engineering-handbook/blob/main/.github/workflows/update-embeddings.yml)
+
+**How it works:**
+1. Push markdown changes to engineering-handbook `main` branch
+2. Workflow detects changed `.md` files using [tj-actions/changed-files](https://github.com/tj-actions/changed-files)
+3. Automatically imports changed files to HandbookSearch database
+4. Embeddings stay in sync with handbook content
+
+**Requirements:**
+- Self-hosted GitHub Actions runner with label `handbook-search`
+- Runner must have access to local PostgreSQL and Ollama
+- HandbookSearch.Cli built in Release mode
+
+**Setup Instructions:** See [engineering-handbook/.github/RUNNER_SETUP.md](https://github.com/Olbrasoft/engineering-handbook/blob/main/.github/RUNNER_SETUP.md)
+
 ## Running Tests
 
 ```bash
