@@ -12,6 +12,30 @@ dotnet build
 dotnet test
 ```
 
+## Deployment
+
+Deploy CLI to `/opt/olbrasoft/handbook-search/`:
+
+```bash
+cd ~/Olbrasoft/HandbookSearch
+./deploy/deploy.sh
+```
+
+Deployed structure:
+```
+/opt/olbrasoft/handbook-search/
+├── cli/              # Compiled CLI binaries
+│   ├── HandbookSearch.Cli
+│   └── appsettings.json
+└── logs/             # Application logs
+```
+
+CLI usage from deployed location:
+```bash
+/opt/olbrasoft/handbook-search/cli/HandbookSearch.Cli import-files --files "path.md" --translate-cs
+/opt/olbrasoft/handbook-search/cli/HandbookSearch.Cli delete-files --files "path.md"
+```
+
 ## Architecture
 
 3-tier architecture following Olbrasoft conventions:
