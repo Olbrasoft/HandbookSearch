@@ -49,6 +49,12 @@ public class AzureTranslatorService : IAzureTranslatorService
             targetLanguage,
             delay.TotalMilliseconds);
 
+        // Apply rate limiting delay BEFORE API call
+        if (delay > TimeSpan.Zero)
+        {
+            await Task.Delay(delay, cancellationToken);
+        }
+
         // Build request URL
         var route = $"/translate?api-version=3.0&to={targetLanguage}";
         if (!string.IsNullOrEmpty(sourceLanguage))
@@ -58,7 +64,7 @@ public class AzureTranslatorService : IAzureTranslatorService
 
         // Build request body
         var requestBody = new[] { new { Text = text } };
-        var content = new StringContent(
+        using var content = new StringContent(
             JsonSerializer.Serialize(requestBody),
             Encoding.UTF8,
             "application/json");
@@ -80,17 +86,12 @@ public class AzureTranslatorService : IAzureTranslatorService
 
         // Parse response
         var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
-        var result = JsonSerializer.Deserialize<TranslationResponse[]>(responseContent);
+        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        var result = JsonSerializer.Deserialize<TranslationResponse[]>(responseContent, options);
 
         if (result == null || result.Length == 0 || result[0].Translations.Length == 0)
         {
             throw new InvalidOperationException("Translation API returned empty result");
-        }
-
-        // Apply rate limiting delay
-        if (delay > TimeSpan.Zero)
-        {
-            await Task.Delay(delay, cancellationToken);
         }
 
         return result[0].Translations[0].Text;

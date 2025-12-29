@@ -78,7 +78,7 @@ The tool automatically calculates delay based on text length:
 
 Each translated file includes a marker for AI agents:
 ```markdown
-<!-- AI_AGENTS_IGNORE: This is a Czech translation for embedding search only. Agents should use the English version. -->
+<!-- AI_AGENTS_IGNORE: This is a translation to '{target-lang}' for embedding search only. Agents should use the English version. -->
 
 [Translated content...]
 ```

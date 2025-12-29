@@ -3,13 +3,14 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Olbrasoft.HandbookSearch.Translation.Cli.Configuration;
 using Olbrasoft.HandbookSearch.Translation.Cli.Services;
 
-var rootCommand = new RootCommand("HandbookSearch Translation CLI - Translate engineering handbook to Czech");
+var rootCommand = new RootCommand("HandbookSearch Translation CLI - Translate engineering handbook to target language");
 
 // translate-all command
-var translateAllCommand = new Command("translate-all", "Translate all markdown files to Czech");
+var translateAllCommand = new Command("translate-all", "Translate all markdown files to target language");
 
 var sourcePathOption = new Option<string>(
     name: "--source",
@@ -43,14 +44,49 @@ translateAllCommand.SetHandler(async (string sourcePath, string targetPath, stri
     logger.LogInformation("Starting translation from {Source} to {Target}", sourcePath, targetPath);
     logger.LogInformation("Target language: {TargetLang}", targetLang);
 
+    // Validate source path
     if (!Directory.Exists(sourcePath))
     {
         Console.WriteLine($"❌ Error: Source directory not found: {sourcePath}");
         Environment.Exit(1);
     }
 
-    // Create target directory if it doesn't exist
-    Directory.CreateDirectory(targetPath);
+    // Validate source path is not a system directory
+    var fullSourcePath = Path.GetFullPath(sourcePath);
+    if (fullSourcePath.StartsWith("/etc/", StringComparison.OrdinalIgnoreCase) ||
+        fullSourcePath.StartsWith("/sys/", StringComparison.OrdinalIgnoreCase) ||
+        fullSourcePath.StartsWith("/proc/", StringComparison.OrdinalIgnoreCase))
+    {
+        Console.WriteLine($"❌ Error: Cannot translate from system directory: {sourcePath}");
+        Environment.Exit(1);
+    }
+
+    // Validate and create target directory
+    try
+    {
+        var fullTargetPath = Path.GetFullPath(targetPath);
+
+        // Ensure target is not a system directory
+        if (fullTargetPath.StartsWith("/etc/", StringComparison.OrdinalIgnoreCase) ||
+            fullTargetPath.StartsWith("/sys/", StringComparison.OrdinalIgnoreCase) ||
+            fullTargetPath.StartsWith("/proc/", StringComparison.OrdinalIgnoreCase))
+        {
+            Console.WriteLine($"❌ Error: Cannot write to system directory: {targetPath}");
+            Environment.Exit(1);
+        }
+
+        Directory.CreateDirectory(targetPath);
+    }
+    catch (UnauthorizedAccessException)
+    {
+        Console.WriteLine($"❌ Error: Permission denied writing to: {targetPath}");
+        Environment.Exit(1);
+    }
+    catch (IOException ex)
+    {
+        Console.WriteLine($"❌ Error: Cannot create target directory: {ex.Message}");
+        Environment.Exit(1);
+    }
 
     // Get all markdown files
     var markdownFiles = Directory.GetFiles(sourcePath, "*.md", SearchOption.AllDirectories);
@@ -86,13 +122,30 @@ translateAllCommand.SetHandler(async (string sourcePath, string targetPath, stri
             var translatedContent = await translator.TranslateAsync(content, targetLang);
 
             // Add metadata marker
-            var markerContent = $"<!-- AI_AGENTS_IGNORE: This is a Czech translation for embedding search only. Agents should use the English version. -->\n\n{translatedContent}";
+            var markerContent = $"<!-- AI_AGENTS_IGNORE: This is a translation to '{targetLang}' for embedding search only. Agents should use the English version. -->\n\n{translatedContent}";
 
             // Write to target file
             await File.WriteAllTextAsync(targetFile, markerContent);
 
             translated++;
             Console.WriteLine("✅");
+        }
+        catch (HttpRequestException ex) when (ex.Message.Contains("401") || ex.Message.Contains("403") || ex.Message.Contains("429"))
+        {
+            // Critical errors - stop processing
+            Console.WriteLine($"\n❌ Critical error: {ex.Message}");
+            logger.LogError(ex, "Critical translation error - stopping execution");
+
+            if (ex.Message.Contains("401") || ex.Message.Contains("403"))
+            {
+                Console.WriteLine("⚠️  Authentication failed. Please check your API key and region configuration.");
+            }
+            else if (ex.Message.Contains("429"))
+            {
+                Console.WriteLine("⚠️  Rate limit exceeded or quota exhausted. Please try again later.");
+            }
+
+            Environment.Exit(1);
         }
         catch (Exception ex)
         {
@@ -136,6 +189,9 @@ static IHostBuilder CreateHostBuilder(string[] args) =>
             // Configuration
             services.Configure<AzureTranslatorOptions>(
                 context.Configuration.GetSection(AzureTranslatorOptions.SectionName));
+
+            // Configuration validation
+            services.AddSingleton<IValidateOptions<AzureTranslatorOptions>, AzureTranslatorOptionsValidator>();
 
             // HTTP Client
             services.AddHttpClient<IAzureTranslatorService, AzureTranslatorService>();
