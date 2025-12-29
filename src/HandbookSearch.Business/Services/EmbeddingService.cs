@@ -23,10 +23,15 @@ public class EmbeddingService : IEmbeddingService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(text);
 
+        // Truncate text if too long (nomic-embed-text has 2048 token context length)
+        // Approx 4 chars per token, so 6000 chars ~= 1500 tokens (safe margin)
+        const int maxChars = 6000;
+        var truncatedText = text.Length > maxChars ? text[..maxChars] : text;
+
         var request = new OllamaEmbeddingRequest
         {
             Model = _options.Model,
-            Prompt = text
+            Prompt = truncatedText
         };
 
         var response = await _httpClient.PostAsJsonAsync(

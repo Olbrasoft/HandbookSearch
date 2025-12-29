@@ -41,22 +41,30 @@ public class DocumentImportService : IDocumentImportService
         {
             try
             {
-                var imported = await ImportFileAsync(filePath, language, cancellationToken);
+                var imported = await ImportFileAsync(filePath, language, handbookPath, cancellationToken);
                 if (imported)
                 {
-                    // Check if it was an update or new document
-                    var relativePath = Path.GetRelativePath(handbookPath, filePath);
-                    var existingDoc = await _dbContext.Documents
-                        .AsNoTracking()
-                        .FirstOrDefaultAsync(d => d.FilePath == relativePath && d.Language == language, cancellationToken);
-
-                    if (existingDoc != null)
+                    // For English files: check if new or updated
+                    // For Czech files: always counted as updated (updating existing English records)
+                    if (language == "en")
                     {
-                        result.Updated++;
+                        var relativePath = Path.GetRelativePath(handbookPath, filePath);
+                        var existingDoc = await _dbContext.Documents
+                            .AsNoTracking()
+                            .FirstOrDefaultAsync(d => d.FilePath == relativePath, cancellationToken);
+
+                        if (existingDoc != null)
+                        {
+                            result.Updated++;
+                        }
+                        else
+                        {
+                            result.Added++;
+                        }
                     }
                     else
                     {
-                        result.Added++;
+                        result.Updated++;
                     }
                 }
                 else
@@ -74,7 +82,7 @@ public class DocumentImportService : IDocumentImportService
     }
 
     /// <inheritdoc />
-    public async Task<bool> ImportFileAsync(string filePath, string language = "en", CancellationToken cancellationToken = default)
+    public async Task<bool> ImportFileAsync(string filePath, string language = "en", string? handbookPath = null, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(language);
@@ -88,19 +96,52 @@ public class DocumentImportService : IDocumentImportService
         var content = await File.ReadAllTextAsync(filePath, cancellationToken);
         var contentHash = CalculateSHA256Hash(content);
 
-        // Extract relative path (assuming we're always in a handbook directory structure)
-        var relativePath = Path.GetFileName(filePath);
-        if (filePath.Contains("engineering-handbook"))
+        // Extract relative path
+        string relativePath;
+        if (!string.IsNullOrWhiteSpace(handbookPath))
         {
-            var handbookIndex = filePath.IndexOf("engineering-handbook", StringComparison.OrdinalIgnoreCase);
-            var handbookPath = filePath.Substring(0, handbookIndex + "engineering-handbook".Length);
+            // Use provided handbook path to calculate relative path
             relativePath = Path.GetRelativePath(handbookPath, filePath);
         }
+        else
+        {
+            // Fallback: try to extract from file path
+            relativePath = Path.GetFileName(filePath);
+            if (filePath.Contains("engineering-handbook"))
+            {
+                var handbookIndex = filePath.IndexOf("engineering-handbook", StringComparison.OrdinalIgnoreCase);
+                var detectedHandbookPath = filePath.Substring(0, handbookIndex + "engineering-handbook".Length);
+                relativePath = Path.GetRelativePath(detectedHandbookPath, filePath);
+            }
+        }
 
-        // Check if document exists for this language and hash changed
+        // Find existing document by FilePath only (one record per English file)
         var existingDoc = await _dbContext.Documents
-            .FirstOrDefaultAsync(d => d.FilePath == relativePath && d.Language == language, cancellationToken);
+            .FirstOrDefaultAsync(d => d.FilePath == relativePath, cancellationToken);
 
+        if (language == "cs")
+        {
+            // Czech import: Update existing English record with Czech embedding
+            if (existingDoc == null)
+            {
+                throw new InvalidOperationException(
+                    $"Cannot import Czech embedding for '{relativePath}': English document not found. " +
+                    "Import English documents first.");
+            }
+
+            // Generate Czech embedding
+            var embeddingArray = await _embeddingService.GenerateEmbeddingAsync(content, cancellationToken);
+            var embedding = new Vector(embeddingArray);
+
+            // Update Czech embedding
+            existingDoc.EmbeddingCs = embedding;
+            existingDoc.UpdatedAt = DateTime.UtcNow;
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            return true;
+        }
+
+        // English import: Create or update English document with English embedding
         if (existingDoc != null && existingDoc.ContentHash == contentHash)
         {
             // No changes, skip
@@ -110,30 +151,29 @@ public class DocumentImportService : IDocumentImportService
         // Extract title from first H1 heading
         var title = ExtractTitle(content);
 
-        // Generate embedding
-        var embeddingArray = await _embeddingService.GenerateEmbeddingAsync(content, cancellationToken);
-        var embedding = new Vector(embeddingArray);
+        // Generate English embedding
+        var englishEmbeddingArray = await _embeddingService.GenerateEmbeddingAsync(content, cancellationToken);
+        var englishEmbedding = new Vector(englishEmbeddingArray);
 
         if (existingDoc != null)
         {
-            // Update existing document
+            // Update existing English document
             existingDoc.Content = content;
             existingDoc.ContentHash = contentHash;
             existingDoc.Title = title;
-            existingDoc.Embedding = embedding;
+            existingDoc.Embedding = englishEmbedding;
             existingDoc.UpdatedAt = DateTime.UtcNow;
         }
         else
         {
-            // Add new document
+            // Add new English document
             var newDoc = new Document
             {
                 FilePath = relativePath,
                 Title = title,
                 Content = content,
                 ContentHash = contentHash,
-                Language = language,
-                Embedding = embedding
+                Embedding = englishEmbedding
             };
 
             _dbContext.Documents.Add(newDoc);

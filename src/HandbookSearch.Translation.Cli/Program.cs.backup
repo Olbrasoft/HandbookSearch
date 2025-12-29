@@ -96,13 +96,7 @@ translateAllCommand.SetHandler(async (string sourcePath, string targetPath, stri
     Console.WriteLine("\n🔄 Starting translation...\n");
 
     var translated = 0;
-    var skipped = 0;
     var errors = new List<string>();
-
-    // Sliding window rate limiter: max 33,000 chars/minute (Azure limit)
-    var rateLimitWindow = TimeSpan.FromMinutes(1);
-    var maxCharsPerMinute = 33000;
-    var recentTranslations = new Queue<(DateTime timestamp, int charCount)>();
 
     foreach (var sourceFile in markdownFiles)
     {
@@ -111,14 +105,6 @@ translateAllCommand.SetHandler(async (string sourcePath, string targetPath, stri
             // Calculate relative path
             var relativePath = Path.GetRelativePath(sourcePath, sourceFile);
             var targetFile = Path.Combine(targetPath, relativePath);
-
-            // Skip if already translated
-            if (File.Exists(targetFile))
-            {
-                skipped++;
-                Console.WriteLine($"⏭️  {relativePath} (already exists)");
-                continue;
-            }
 
             // Create target directory
             var targetDir = Path.GetDirectoryName(targetFile);
@@ -129,38 +115,8 @@ translateAllCommand.SetHandler(async (string sourcePath, string targetPath, stri
 
             // Read source content
             var content = await File.ReadAllTextAsync(sourceFile);
-            var charCount = content.Length;
 
-            Console.Write($"📝 {relativePath} ({charCount} chars)... ");
-
-            // Rate limit check: remove old entries outside window
-            var now = DateTime.UtcNow;
-            while (recentTranslations.Count > 0 && (now - recentTranslations.Peek().timestamp) > rateLimitWindow)
-            {
-                recentTranslations.Dequeue();
-            }
-
-            // Calculate chars in current window
-            var charsInWindow = recentTranslations.Sum(x => x.charCount);
-
-            // Wait if we would exceed rate limit
-            if (charsInWindow + charCount > maxCharsPerMinute)
-            {
-                var oldestInWindow = recentTranslations.Peek().timestamp;
-                var waitTime = rateLimitWindow - (now - oldestInWindow) + TimeSpan.FromSeconds(5); // +5s safety margin
-
-                Console.WriteLine($"\n⏸️  Rate limit: waiting {(int)waitTime.TotalSeconds}s (window: {charsInWindow:N0}/{maxCharsPerMinute:N0} chars)");
-                await Task.Delay(waitTime);
-
-                // Clear old entries after waiting
-                now = DateTime.UtcNow;
-                while (recentTranslations.Count > 0 && (now - recentTranslations.Peek().timestamp) > rateLimitWindow)
-                {
-                    recentTranslations.Dequeue();
-                }
-
-                Console.Write($"📝 {relativePath} ({charCount} chars)... ");
-            }
+            Console.Write($"📝 {relativePath}... ");
 
             // Translate
             var translatedContent = await translator.TranslateAsync(content, targetLang);
@@ -170,9 +126,6 @@ translateAllCommand.SetHandler(async (string sourcePath, string targetPath, stri
 
             // Write to target file
             await File.WriteAllTextAsync(targetFile, markerContent);
-
-            // Track translation for rate limiting
-            recentTranslations.Enqueue((DateTime.UtcNow, charCount));
 
             translated++;
             Console.WriteLine("✅");
@@ -204,7 +157,6 @@ translateAllCommand.SetHandler(async (string sourcePath, string targetPath, stri
 
     Console.WriteLine($"\n✅ Translation completed!");
     Console.WriteLine($"   Translated: {translated}");
-    Console.WriteLine($"   Skipped:    {skipped} (already exist)");
     Console.WriteLine($"   Errors:     {errors.Count}");
     Console.WriteLine($"   Total:      {markdownFiles.Length}");
 
