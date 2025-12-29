@@ -23,10 +23,15 @@ public class HandbookSearchDbContext : DbContext
 
         modelBuilder.Entity<Document>(entity =>
         {
+            // Use snake_case table name for PostgreSQL
+            entity.ToTable("documents");
+
             entity.HasKey(e => e.Id);
 
-            // Unique constraint on file path (one record per English file)
-            entity.HasIndex(e => e.FilePath).IsUnique();
+            // Unique constraint on file_path (one record per English file)
+            entity.HasIndex(e => e.FilePath)
+                .IsUnique()
+                .HasDatabaseName("idx_documents_file_path");
 
             if (isPostgreSQL)
             {
@@ -35,14 +40,16 @@ public class HandbookSearchDbContext : DbContext
                     .HasMethod("hnsw")
                     .HasOperators("vector_cosine_ops")
                     .HasStorageParameter("m", 16)
-                    .HasStorageParameter("ef_construction", 64);
+                    .HasStorageParameter("ef_construction", 64)
+                    .HasDatabaseName("idx_documents_embedding");
 
                 // HNSW index for Czech embeddings (PostgreSQL only)
                 entity.HasIndex(e => e.EmbeddingCs)
                     .HasMethod("hnsw")
                     .HasOperators("vector_cosine_ops")
                     .HasStorageParameter("m", 16)
-                    .HasStorageParameter("ef_construction", 64);
+                    .HasStorageParameter("ef_construction", 64)
+                    .HasDatabaseName("idx_documents_embedding_cs");
 
                 // Timestamps with PostgreSQL default
                 entity.Property(e => e.CreatedAt)
