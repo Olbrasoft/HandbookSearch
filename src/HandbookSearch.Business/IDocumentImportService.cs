@@ -20,9 +20,10 @@ public interface IDocumentImportService
     /// <param name="filePath">Full path to the markdown file</param>
     /// <param name="language">Language code (e.g., "en", "cs"). Defaults to "en".</param>
     /// <param name="handbookPath">Root path of the handbook directory (optional)</param>
+    /// <param name="translateCs">If true, generates Czech translation in-memory and creates Czech embedding. Translation is NOT saved to disk.</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>True if the file was imported/updated, false if skipped</returns>
-    Task<bool> ImportFileAsync(string filePath, string language = "en", string? handbookPath = null, CancellationToken cancellationToken = default);
+    Task<bool> ImportFileAsync(string filePath, string language = "en", string? handbookPath = null, bool translateCs = false, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Deletes a document from the database by its relative file path

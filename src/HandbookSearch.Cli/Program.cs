@@ -72,10 +72,15 @@ var languageOptionFiles = new Option<string>(
     name: "--language",
     description: "Language code (e.g., 'en', 'cs')",
     getDefaultValue: () => "en");
+var translateCsOption = new Option<bool>(
+    name: "--translate-cs",
+    description: "Generate Czech translation in-memory and create Czech embedding (translation not saved to disk)",
+    getDefaultValue: () => false);
 importFilesCommand.AddOption(filesOption);
 importFilesCommand.AddOption(languageOptionFiles);
+importFilesCommand.AddOption(translateCsOption);
 
-importFilesCommand.SetHandler(async (string files, string language) =>
+importFilesCommand.SetHandler(async (string files, string language, bool translateCs) =>
 {
     var host = CreateHostBuilder().Build();
     var importService = host.Services.GetRequiredService<IDocumentImportService>();
@@ -83,7 +88,7 @@ importFilesCommand.SetHandler(async (string files, string language) =>
 
     var filePaths = files.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-    logger.LogInformation("Starting import of {Count} files (Language: {Language})", filePaths.Length, language);
+    logger.LogInformation("Starting import of {Count} files (Language: {Language}, TranslateCs: {TranslateCs})", filePaths.Length, language, translateCs);
 
     var imported = 0;
     var skipped = 0;
@@ -93,11 +98,12 @@ importFilesCommand.SetHandler(async (string files, string language) =>
     {
         try
         {
-            var result = await importService.ImportFileAsync(filePath, language, null);
+            var result = await importService.ImportFileAsync(filePath, language, null, translateCs);
             if (result)
             {
                 imported++;
-                Console.WriteLine($"✓ {filePath}");
+                var suffix = translateCs ? " (+Czech embedding)" : "";
+                Console.WriteLine($"✓ {filePath}{suffix}");
             }
             else
             {
@@ -122,7 +128,7 @@ importFilesCommand.SetHandler(async (string files, string language) =>
         Console.WriteLine($"\n⚠️  Errors: {errors.Count}");
         Environment.Exit(1);
     }
-}, filesOption, languageOptionFiles);
+}, filesOption, languageOptionFiles, translateCsOption);
 
 // delete-files command
 var deleteFilesCommand = new Command("delete-files", "Delete specific documents from database");
@@ -193,14 +199,16 @@ static IHostBuilder CreateHostBuilder() =>
         {
             // Configuration
             services.Configure<OllamaOptions>(context.Configuration.GetSection("Ollama"));
+            services.Configure<AzureTranslatorOptions>(context.Configuration.GetSection("AzureTranslator"));
 
             // Database
             var connectionString = context.Configuration.GetConnectionString("DefaultConnection");
             services.AddDbContext<HandbookSearchDbContext>(options =>
                 options.UseNpgsql(connectionString, o => o.UseVector()));
 
-            // HTTP Client for EmbeddingService
+            // HTTP Clients
             services.AddHttpClient<IEmbeddingService, EmbeddingService>();
+            services.AddHttpClient<ITranslationService, AzureTranslationService>();
 
             // Business Services
             services.AddScoped<IDocumentImportService, DocumentImportService>();

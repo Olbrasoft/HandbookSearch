@@ -14,13 +14,16 @@ public class DocumentImportService : IDocumentImportService
 {
     private readonly HandbookSearchDbContext _dbContext;
     private readonly IEmbeddingService _embeddingService;
+    private readonly ITranslationService? _translationService;
 
     public DocumentImportService(
         HandbookSearchDbContext dbContext,
-        IEmbeddingService embeddingService)
+        IEmbeddingService embeddingService,
+        ITranslationService? translationService = null)
     {
         _dbContext = dbContext;
         _embeddingService = embeddingService;
+        _translationService = translationService;
     }
 
     /// <inheritdoc />
@@ -41,7 +44,7 @@ public class DocumentImportService : IDocumentImportService
         {
             try
             {
-                var imported = await ImportFileAsync(filePath, language, handbookPath, cancellationToken);
+                var imported = await ImportFileAsync(filePath, language, handbookPath, translateCs: false, cancellationToken);
                 if (imported)
                 {
                     // For English files: check if new or updated
@@ -82,7 +85,7 @@ public class DocumentImportService : IDocumentImportService
     }
 
     /// <inheritdoc />
-    public async Task<bool> ImportFileAsync(string filePath, string language = "en", string? handbookPath = null, CancellationToken cancellationToken = default)
+    public async Task<bool> ImportFileAsync(string filePath, string language = "en", string? handbookPath = null, bool translateCs = false, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(language);
@@ -155,6 +158,20 @@ public class DocumentImportService : IDocumentImportService
         var englishEmbeddingArray = await _embeddingService.GenerateEmbeddingAsync(content, cancellationToken);
         var englishEmbedding = new Vector(englishEmbeddingArray);
 
+        // Generate Czech embedding if requested
+        Vector? czechEmbedding = null;
+        if (translateCs && _translationService != null)
+        {
+            // Translate to Czech IN MEMORY (not saved to disk)
+            var czechContent = await _translationService.TranslateToCzechAsync(content, cancellationToken);
+
+            // Generate Czech embedding
+            var czechEmbeddingArray = await _embeddingService.GenerateEmbeddingAsync(czechContent, cancellationToken);
+            czechEmbedding = new Vector(czechEmbeddingArray);
+
+            // Czech translation is discarded here - only embedding is stored
+        }
+
         if (existingDoc != null)
         {
             // Update existing English document
@@ -162,6 +179,7 @@ public class DocumentImportService : IDocumentImportService
             existingDoc.ContentHash = contentHash;
             existingDoc.Title = title;
             existingDoc.Embedding = englishEmbedding;
+            existingDoc.EmbeddingCs = czechEmbedding; // Null if translateCs=false
             existingDoc.UpdatedAt = DateTime.UtcNow;
         }
         else
@@ -173,7 +191,8 @@ public class DocumentImportService : IDocumentImportService
                 Title = title,
                 Content = content,
                 ContentHash = contentHash,
-                Embedding = englishEmbedding
+                Embedding = englishEmbedding,
+                EmbeddingCs = czechEmbedding // Null if translateCs=false
             };
 
             _dbContext.Documents.Add(newDoc);
