@@ -189,4 +189,53 @@ public class EmbeddingServiceTests
         Assert.Equal(HttpMethod.Post, capturedRequest.Method);
         Assert.Equal("http://localhost:11434/api/embeddings", capturedRequest.RequestUri?.ToString());
     }
+
+    [Fact]
+    public async Task GenerateEmbeddingAsync_LongText_TruncatesTo5000Chars()
+    {
+        // Arrange
+        var longText = new string('a', 7000); // 7000 characters - exceeds maxChars limit
+        HttpRequestMessage? capturedRequest = null;
+        var expectedEmbedding = new float[768];
+
+        var response = new
+        {
+            embedding = expectedEmbedding
+        };
+
+        _mockHttpMessageHandler
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>())
+            .Callback<HttpRequestMessage, CancellationToken>((req, ct) => capturedRequest = req)
+            .ReturnsAsync(new HttpResponseMessage
+            {
+                StatusCode = HttpStatusCode.OK,
+                Content = JsonContent.Create(response)
+            });
+
+        // Act
+        await _service.GenerateEmbeddingAsync(longText);
+
+        // Assert
+        Assert.NotNull(capturedRequest);
+        Assert.NotNull(capturedRequest.Content);
+
+        // Read and parse the request content
+        var requestContent = await capturedRequest.Content.ReadFromJsonAsync<OllamaRequest>();
+        Assert.NotNull(requestContent);
+        Assert.NotNull(requestContent.Prompt);
+
+        // Verify the prompt was truncated to exactly 5000 characters
+        Assert.Equal(5000, requestContent.Prompt.Length);
+        Assert.Equal(new string('a', 5000), requestContent.Prompt);
+    }
+
+    private record OllamaRequest
+    {
+        public string? Model { get; init; }
+        public string? Prompt { get; init; }
+    }
 }
