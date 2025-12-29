@@ -28,6 +28,11 @@ public class Document
     public required string ContentHash { get; set; }
 
     /// <summary>
+    /// Language code (e.g., "en", "cs")
+    /// </summary>
+    public string Language { get; set; } = "en";
+
+    /// <summary>
     /// 768-dimensional embedding from nomic-embed-text
     /// </summary>
     [Column(TypeName = "vector(768)")]
