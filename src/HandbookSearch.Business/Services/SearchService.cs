@@ -35,8 +35,8 @@ public class SearchService : ISearchService
         var queryEmbedding = await _embeddingService.GenerateEmbeddingAsync(query, ct);
         var queryVector = new Vector(queryEmbedding);
 
-        // 2. Search using cosine distance
-        var resultsQuery = _dbContext.Documents
+        // 2. Search in English embeddings
+        var englishResultsQuery = _dbContext.Documents
             .Where(d => d.Embedding != null)
             .Select(d => new
             {
@@ -44,20 +44,39 @@ public class SearchService : ISearchService
                 Distance = d.Embedding!.CosineDistance(queryVector)
             });
 
-        // 3. Optional: filter by max distance
         if (maxDistance.HasValue)
         {
-            resultsQuery = resultsQuery.Where(x => x.Distance < maxDistance.Value);
+            englishResultsQuery = englishResultsQuery.Where(x => x.Distance < maxDistance.Value);
         }
 
-        // 4. Execute query
-        var results = await resultsQuery
-            .OrderBy(x => x.Distance)
+        var englishResults = await englishResultsQuery.ToListAsync(ct);
+
+        // 3. Search in Czech embeddings
+        var czechResultsQuery = _dbContext.Documents
+            .Where(d => d.EmbeddingCs != null)
+            .Select(d => new
+            {
+                Document = d,
+                Distance = d.EmbeddingCs!.CosineDistance(queryVector)
+            });
+
+        if (maxDistance.HasValue)
+        {
+            czechResultsQuery = czechResultsQuery.Where(x => x.Distance < maxDistance.Value);
+        }
+
+        var czechResults = await czechResultsQuery.ToListAsync(ct);
+
+        // 4. Merge results and deduplicate by FilePath (keep best match)
+        var allResults = englishResults.Concat(czechResults)
+            .GroupBy(r => r.Document.FilePath)
+            .Select(g => g.OrderBy(r => r.Distance).First())
+            .OrderBy(r => r.Distance)
             .Take(limit)
-            .ToListAsync(ct);
+            .ToList();
 
         // 5. Map to SearchResult
-        return results.Select(r => new SearchResult(
+        return allResults.Select(r => new SearchResult(
             DocumentId: r.Document.Id,
             FilePath: r.Document.FilePath,
             Title: r.Document.Title,

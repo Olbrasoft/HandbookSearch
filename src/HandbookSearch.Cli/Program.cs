@@ -93,7 +93,7 @@ importFilesCommand.SetHandler(async (string files, string language) =>
     {
         try
         {
-            var result = await importService.ImportFileAsync(filePath, language);
+            var result = await importService.ImportFileAsync(filePath, language, null);
             if (result)
             {
                 imported++;

@@ -13,8 +13,8 @@ using Pgvector;
 namespace Olbrasoft.HandbookSearch.Data.EntityFrameworkCore.Migrations
 {
     [DbContext(typeof(HandbookSearchDbContext))]
-    [Migration("20251229165545_AddLanguageColumn")]
-    partial class AddLanguageColumn
+    [Migration("20251229190631_AddCzechEmbedding")]
+    partial class AddCzechEmbedding
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -51,15 +51,12 @@ namespace Olbrasoft.HandbookSearch.Data.EntityFrameworkCore.Migrations
                     b.Property<Vector>("Embedding")
                         .HasColumnType("vector(768)");
 
+                    b.Property<Vector>("EmbeddingCs")
+                        .HasColumnType("vector(768)");
+
                     b.Property<string>("FilePath")
                         .IsRequired()
                         .HasColumnType("text");
-
-                    b.Property<string>("Language")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("en");
 
                     b.Property<string>("Title")
                         .HasColumnType("text");
@@ -78,9 +75,14 @@ namespace Olbrasoft.HandbookSearch.Data.EntityFrameworkCore.Migrations
                     NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Embedding"), "hnsw");
                     NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex("Embedding"), new[] { "vector_cosine_ops" });
 
-                    b.HasIndex("Language");
+                    b.HasIndex("EmbeddingCs")
+                        .HasAnnotation("Npgsql:StorageParameter:ef_construction", 64)
+                        .HasAnnotation("Npgsql:StorageParameter:m", 16);
 
-                    b.HasIndex("FilePath", "Language")
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("EmbeddingCs"), "hnsw");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex("EmbeddingCs"), new[] { "vector_cosine_ops" });
+
+                    b.HasIndex("FilePath")
                         .IsUnique();
 
                     b.ToTable("Documents");
