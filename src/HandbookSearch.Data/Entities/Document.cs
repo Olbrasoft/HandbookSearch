@@ -28,15 +28,15 @@ public class Document
     public required string ContentHash { get; set; }
 
     /// <summary>
-    /// 768-dimensional English embedding from nomic-embed-text
+    /// 1024-dimensional English embedding from qwen3-embedding:0.6b
     /// </summary>
-    [Column(TypeName = "vector(768)")]
+    [Column(TypeName = "vector(1024)")]
     public Vector? Embedding { get; set; }
 
     /// <summary>
-    /// 768-dimensional Czech embedding from nomic-embed-text
+    /// 1024-dimensional Czech embedding from qwen3-embedding:0.6b
     /// </summary>
-    [Column(TypeName = "vector(768)")]
+    [Column(TypeName = "vector(1024)")]
     public Vector? EmbeddingCs { get; set; }
 
     public DateTime CreatedAt { get; set; }
