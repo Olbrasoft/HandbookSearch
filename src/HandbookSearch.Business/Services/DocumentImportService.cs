@@ -183,6 +183,23 @@ public class DocumentImportService : IDocumentImportService
         return true;
     }
 
+    /// <inheritdoc />
+    public async Task<bool> DeleteDocumentAsync(string relativePath, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
+
+        var document = await _dbContext.Documents
+            .FirstOrDefaultAsync(d => d.FilePath == relativePath, cancellationToken);
+
+        if (document == null)
+            return false;
+
+        _dbContext.Documents.Remove(document);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return true;
+    }
+
     private static string CalculateSHA256Hash(string content)
     {
         var bytes = Encoding.UTF8.GetBytes(content);

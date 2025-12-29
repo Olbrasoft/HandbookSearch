@@ -23,4 +23,12 @@ public interface IDocumentImportService
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>True if the file was imported/updated, false if skipped</returns>
     Task<bool> ImportFileAsync(string filePath, string language = "en", string? handbookPath = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes a document from the database by its relative file path
+    /// </summary>
+    /// <param name="relativePath">Relative path from handbook root (e.g., "docs/guide.md")</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>True if document was deleted, false if not found</returns>
+    Task<bool> DeleteDocumentAsync(string relativePath, CancellationToken cancellationToken = default);
 }

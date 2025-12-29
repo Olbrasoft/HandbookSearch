@@ -124,8 +124,61 @@ importFilesCommand.SetHandler(async (string files, string language) =>
     }
 }, filesOption, languageOptionFiles);
 
+// delete-files command
+var deleteFilesCommand = new Command("delete-files", "Delete specific documents from database");
+var deleteFilesOption = new Option<string>(
+    name: "--files",
+    description: "Comma-separated list of relative file paths (e.g., 'docs/guide.md,development-guidelines/workflow-guide.md')")
+{
+    IsRequired = true
+};
+deleteFilesCommand.AddOption(deleteFilesOption);
+
+deleteFilesCommand.SetHandler(async (string files) =>
+{
+    var host = CreateHostBuilder().Build();
+    var importService = host.Services.GetRequiredService<IDocumentImportService>();
+    var logger = host.Services.GetRequiredService<ILogger<Program>>();
+
+    var relativePaths = files.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    logger.LogInformation("Starting deletion of {Count} documents", relativePaths.Length);
+
+    var deleted = 0;
+    var notFound = 0;
+
+    foreach (var relativePath in relativePaths)
+    {
+        try
+        {
+            var result = await importService.DeleteDocumentAsync(relativePath);
+            if (result)
+            {
+                deleted++;
+                Console.WriteLine($"✓ {relativePath} (deleted)");
+            }
+            else
+            {
+                notFound++;
+                Console.WriteLine($"○ {relativePath} (not found)");
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error deleting {Path}", relativePath);
+            Console.WriteLine($"✗ {relativePath}: {ex.Message}");
+        }
+    }
+
+    Console.WriteLine($"\n✅ Deletion completed!");
+    Console.WriteLine($"   Deleted:   {deleted}");
+    Console.WriteLine($"   Not found: {notFound}");
+    Console.WriteLine($"   Total:     {relativePaths.Length}");
+}, deleteFilesOption);
+
 rootCommand.AddCommand(importAllCommand);
 rootCommand.AddCommand(importFilesCommand);
+rootCommand.AddCommand(deleteFilesCommand);
 
 return await rootCommand.InvokeAsync(args);
 
