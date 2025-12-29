@@ -35,53 +35,38 @@ public class SearchService : ISearchService
         var queryEmbedding = await _embeddingService.GenerateEmbeddingAsync(query, ct);
         var queryVector = new Vector(queryEmbedding);
 
-        // 2. Search in English embeddings
-        var englishResultsQuery = _dbContext.Documents
-            .Where(d => d.Embedding != null)
+        // 2. Search in BOTH English and Czech embeddings
+        var allDocuments = await _dbContext.Documents
+            .Where(d => d.Embedding != null || d.EmbeddingCs != null)
             .Select(d => new
             {
                 Document = d,
-                Distance = d.Embedding!.CosineDistance(queryVector)
-            });
+                DistanceEn = d.Embedding != null ? (double?)d.Embedding.CosineDistance(queryVector) : null,
+                DistanceCs = d.EmbeddingCs != null ? (double?)d.EmbeddingCs.CosineDistance(queryVector) : null
+            })
+            .ToListAsync(ct);
 
-        if (maxDistance.HasValue)
-        {
-            englishResultsQuery = englishResultsQuery.Where(x => x.Distance < maxDistance.Value);
-        }
-
-        var englishResults = await englishResultsQuery.ToListAsync(ct);
-
-        // 3. Search in Czech embeddings
-        var czechResultsQuery = _dbContext.Documents
-            .Where(d => d.EmbeddingCs != null)
+        // 3. Merge results: take best (minimum) distance from both embeddings
+        var mergedResults = allDocuments
             .Select(d => new
             {
-                Document = d,
-                Distance = d.EmbeddingCs!.CosineDistance(queryVector)
-            });
-
-        if (maxDistance.HasValue)
-        {
-            czechResultsQuery = czechResultsQuery.Where(x => x.Distance < maxDistance.Value);
-        }
-
-        var czechResults = await czechResultsQuery.ToListAsync(ct);
-
-        // 4. Merge results and deduplicate by FilePath (keep best match)
-        var allResults = englishResults.Concat(czechResults)
-            .GroupBy(r => r.Document.FilePath)
-            .Select(g => g.OrderBy(r => r.Distance).First())
-            .OrderBy(r => r.Distance)
+                d.Document,
+                BestDistance = new[] { d.DistanceEn, d.DistanceCs }
+                    .Where(dist => dist.HasValue)
+                    .Min(dist => dist!.Value)
+            })
+            .Where(x => !maxDistance.HasValue || x.BestDistance < maxDistance.Value)
+            .OrderBy(x => x.BestDistance)
             .Take(limit)
             .ToList();
 
-        // 5. Map to SearchResult
-        return allResults.Select(r => new SearchResult(
+        // 4. Map to SearchResult
+        return mergedResults.Select(r => new SearchResult(
             DocumentId: r.Document.Id,
             FilePath: r.Document.FilePath,
             Title: r.Document.Title,
             ContentSnippet: GetSnippet(r.Document.Content, 200),
-            Distance: (float)r.Distance
+            Distance: (float)r.BestDistance
         )).ToList();
     }
 
