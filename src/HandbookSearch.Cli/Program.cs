@@ -18,19 +18,24 @@ var pathOption = new Option<string>(
 {
     IsRequired = true
 };
+var languageOptionAll = new Option<string>(
+    name: "--language",
+    description: "Language code (e.g., 'en', 'cs')",
+    getDefaultValue: () => "en");
 importAllCommand.AddOption(pathOption);
+importAllCommand.AddOption(languageOptionAll);
 
-importAllCommand.SetHandler(async (string path) =>
+importAllCommand.SetHandler(async (string path, string language) =>
 {
     var host = CreateHostBuilder().Build();
     var importService = host.Services.GetRequiredService<IDocumentImportService>();
     var logger = host.Services.GetRequiredService<ILogger<Program>>();
 
-    logger.LogInformation("Starting import from: {Path}", path);
+    logger.LogInformation("Starting import from: {Path} (Language: {Language})", path, language);
 
     try
     {
-        var result = await importService.ImportAllAsync(path);
+        var result = await importService.ImportAllAsync(path, language);
 
         Console.WriteLine("\n✅ Import completed!");
         Console.WriteLine($"   Added:   {result.Added}");
@@ -53,7 +58,7 @@ importAllCommand.SetHandler(async (string path) =>
         Console.WriteLine($"\n❌ Error: {ex.Message}");
         Environment.Exit(1);
     }
-}, pathOption);
+}, pathOption, languageOptionAll);
 
 // import-files command
 var importFilesCommand = new Command("import-files", "Import specific markdown files");
@@ -63,9 +68,14 @@ var filesOption = new Option<string>(
 {
     IsRequired = true
 };
+var languageOptionFiles = new Option<string>(
+    name: "--language",
+    description: "Language code (e.g., 'en', 'cs')",
+    getDefaultValue: () => "en");
 importFilesCommand.AddOption(filesOption);
+importFilesCommand.AddOption(languageOptionFiles);
 
-importFilesCommand.SetHandler(async (string files) =>
+importFilesCommand.SetHandler(async (string files, string language) =>
 {
     var host = CreateHostBuilder().Build();
     var importService = host.Services.GetRequiredService<IDocumentImportService>();
@@ -73,7 +83,7 @@ importFilesCommand.SetHandler(async (string files) =>
 
     var filePaths = files.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-    logger.LogInformation("Starting import of {Count} files", filePaths.Length);
+    logger.LogInformation("Starting import of {Count} files (Language: {Language})", filePaths.Length, language);
 
     var imported = 0;
     var skipped = 0;
@@ -83,7 +93,7 @@ importFilesCommand.SetHandler(async (string files) =>
     {
         try
         {
-            var result = await importService.ImportFileAsync(filePath);
+            var result = await importService.ImportFileAsync(filePath, language);
             if (result)
             {
                 imported++;
@@ -112,7 +122,7 @@ importFilesCommand.SetHandler(async (string files) =>
         Console.WriteLine($"\n⚠️  Errors: {errors.Count}");
         Environment.Exit(1);
     }
-}, filesOption);
+}, filesOption, languageOptionFiles);
 
 rootCommand.AddCommand(importAllCommand);
 rootCommand.AddCommand(importFilesCommand);

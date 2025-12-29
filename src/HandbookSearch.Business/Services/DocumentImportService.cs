@@ -24,9 +24,10 @@ public class DocumentImportService : IDocumentImportService
     }
 
     /// <inheritdoc />
-    public async Task<ImportResult> ImportAllAsync(string handbookPath, CancellationToken cancellationToken = default)
+    public async Task<ImportResult> ImportAllAsync(string handbookPath, string language = "en", CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(handbookPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(language);
 
         if (!Directory.Exists(handbookPath))
         {
@@ -40,14 +41,14 @@ public class DocumentImportService : IDocumentImportService
         {
             try
             {
-                var imported = await ImportFileAsync(filePath, cancellationToken);
+                var imported = await ImportFileAsync(filePath, language, cancellationToken);
                 if (imported)
                 {
                     // Check if it was an update or new document
                     var relativePath = Path.GetRelativePath(handbookPath, filePath);
                     var existingDoc = await _dbContext.Documents
                         .AsNoTracking()
-                        .FirstOrDefaultAsync(d => d.FilePath == relativePath, cancellationToken);
+                        .FirstOrDefaultAsync(d => d.FilePath == relativePath && d.Language == language, cancellationToken);
 
                     if (existingDoc != null)
                     {
@@ -73,9 +74,10 @@ public class DocumentImportService : IDocumentImportService
     }
 
     /// <inheritdoc />
-    public async Task<bool> ImportFileAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<bool> ImportFileAsync(string filePath, string language = "en", CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(language);
 
         if (!File.Exists(filePath))
         {
@@ -95,9 +97,9 @@ public class DocumentImportService : IDocumentImportService
             relativePath = Path.GetRelativePath(handbookPath, filePath);
         }
 
-        // Check if document exists and hash changed
+        // Check if document exists for this language and hash changed
         var existingDoc = await _dbContext.Documents
-            .FirstOrDefaultAsync(d => d.FilePath == relativePath, cancellationToken);
+            .FirstOrDefaultAsync(d => d.FilePath == relativePath && d.Language == language, cancellationToken);
 
         if (existingDoc != null && existingDoc.ContentHash == contentHash)
         {
@@ -130,6 +132,7 @@ public class DocumentImportService : IDocumentImportService
                 Title = title,
                 Content = content,
                 ContentHash = contentHash,
+                Language = language,
                 Embedding = embedding
             };
 

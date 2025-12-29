@@ -25,8 +25,15 @@ public class HandbookSearchDbContext : DbContext
         {
             entity.HasKey(e => e.Id);
 
-            // Unique constraint on file path
-            entity.HasIndex(e => e.FilePath).IsUnique();
+            // Unique constraint on file path + language
+            entity.HasIndex(e => new { e.FilePath, e.Language }).IsUnique();
+
+            // Index on language for filtering
+            entity.HasIndex(e => e.Language);
+
+            // Default value for Language
+            entity.Property(e => e.Language)
+                .HasDefaultValue("en");
 
             if (isPostgreSQL)
             {
