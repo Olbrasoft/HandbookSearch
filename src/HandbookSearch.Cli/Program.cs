@@ -76,11 +76,15 @@ var translateCsOption = new Option<bool>(
     name: "--translate-cs",
     description: "Generate Czech translation in-memory and create Czech embedding (translation not saved to disk)",
     getDefaultValue: () => false);
+var handbookPathOptionFiles = new Option<string?>(
+    name: "--handbook-path",
+    description: "Root path of the handbook directory (for calculating relative paths)");
 importFilesCommand.AddOption(filesOption);
 importFilesCommand.AddOption(languageOptionFiles);
 importFilesCommand.AddOption(translateCsOption);
+importFilesCommand.AddOption(handbookPathOptionFiles);
 
-importFilesCommand.SetHandler(async (string files, string language, bool translateCs) =>
+importFilesCommand.SetHandler(async (string files, string language, bool translateCs, string? handbookPath) =>
 {
     var host = CreateHostBuilder().Build();
     var importService = host.Services.GetRequiredService<IDocumentImportService>();
@@ -98,7 +102,7 @@ importFilesCommand.SetHandler(async (string files, string language, bool transla
     {
         try
         {
-            var result = await importService.ImportFileAsync(filePath, language, null, translateCs);
+            var result = await importService.ImportFileAsync(filePath, language, handbookPath, translateCs);
             if (result)
             {
                 imported++;
@@ -128,7 +132,7 @@ importFilesCommand.SetHandler(async (string files, string language, bool transla
         Console.WriteLine($"\n⚠️  Errors: {errors.Count}");
         Environment.Exit(1);
     }
-}, filesOption, languageOptionFiles, translateCsOption);
+}, filesOption, languageOptionFiles, translateCsOption, handbookPathOptionFiles);
 
 // delete-files command
 var deleteFilesCommand = new Command("delete-files", "Delete specific documents from database");
