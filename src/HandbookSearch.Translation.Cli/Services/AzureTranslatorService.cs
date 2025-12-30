@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
@@ -7,7 +8,7 @@ using Olbrasoft.HandbookSearch.Translation.Cli.Configuration;
 namespace Olbrasoft.HandbookSearch.Translation.Cli.Services;
 
 /// <summary>
-/// Azure Translator service implementation with rate limiting
+/// Azure Translator service implementation with rate limiting and fallback support
 /// </summary>
 public class AzureTranslatorService : IAzureTranslatorService
 {
@@ -25,10 +26,8 @@ public class AzureTranslatorService : IAzureTranslatorService
         _options = options.Value;
         _logger = logger;
 
-        // Configure HttpClient
+        // Configure HttpClient base address only (headers set per-request for fallback support)
         _httpClient.BaseAddress = new Uri(_options.Endpoint);
-        _httpClient.DefaultRequestHeaders.Add("Ocp-Apim-Subscription-Key", _options.ApiKey);
-        _httpClient.DefaultRequestHeaders.Add("Ocp-Apim-Subscription-Region", _options.Region);
     }
 
     public async Task<string> TranslateAsync(
@@ -44,7 +43,7 @@ public class AzureTranslatorService : IAzureTranslatorService
         var delay = CalculateDelay(text.Length);
 
         _logger.LogInformation(
-            "Translating {CharCount} characters to {TargetLang}, delay: {Delay}ms",
+            "Translating {CharCount} characters to {TargetLang} using primary account, delay: {Delay}ms",
             text.Length,
             targetLanguage,
             delay.TotalMilliseconds);
@@ -55,6 +54,103 @@ public class AzureTranslatorService : IAzureTranslatorService
             await Task.Delay(delay, cancellationToken);
         }
 
+        // Try translation with fallback support
+        return await TranslateWithFallbackAsync(text, targetLanguage, sourceLanguage, cancellationToken);
+    }
+
+    /// <summary>
+    /// Translates text with automatic fallback to secondary API key on failure
+    /// </summary>
+    /// <param name="text">Text to translate</param>
+    /// <param name="targetLanguage">Target language code</param>
+    /// <param name="sourceLanguage">Optional source language code</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Translated text</returns>
+    /// <exception cref="HttpRequestException">Thrown when both primary and fallback accounts fail</exception>
+    private async Task<string> TranslateWithFallbackAsync(
+        string text,
+        string targetLanguage,
+        string? sourceLanguage,
+        CancellationToken cancellationToken)
+    {
+        // Try primary API key
+        try
+        {
+            return await SendTranslationRequestAsync(
+                text, targetLanguage, sourceLanguage,
+                _options.ApiKey, "primary account", cancellationToken);
+        }
+        catch (HttpRequestException ex) when (IsFallbackEligible(ex))
+        {
+            if (string.IsNullOrEmpty(_options.FallbackApiKey))
+            {
+                _logger.LogError(ex,
+                    "Primary account failed: {StatusCode}, but no fallback key configured",
+                    ex.StatusCode);
+                throw;
+            }
+
+            _logger.LogError(ex,
+                "Primary account failed with {StatusCode}. Retrying with fallback account...",
+                ex.StatusCode);
+
+            _logger.LogInformation("Retrying with fallback account");
+
+            // Try fallback API key
+            try
+            {
+                var result = await SendTranslationRequestAsync(
+                    text, targetLanguage, sourceLanguage,
+                    _options.FallbackApiKey, "fallback account", cancellationToken);
+
+                _logger.LogInformation("Translation completed successfully using fallback account");
+                return result;
+            }
+            catch (HttpRequestException fallbackEx) when (IsFallbackEligible(fallbackEx))
+            {
+                _logger.LogCritical(
+                    "Both accounts failed. Primary: {PrimaryError}, Fallback: {FallbackError}",
+                    ex.StatusCode, fallbackEx.StatusCode);
+
+                var nextReset = GetNextQuotaResetDate();
+                throw new HttpRequestException(
+                    $"Both accounts failed. Primary ({ex.StatusCode}): {ex.Message}, " +
+                    $"Fallback ({fallbackEx.StatusCode}): {fallbackEx.Message}. " +
+                    $"Quota resets on {nextReset:yyyy-MM-dd}.", fallbackEx);
+            }
+            catch (Exception fallbackEx) when (fallbackEx is TaskCanceledException or OperationCanceledException)
+            {
+                _logger.LogWarning(fallbackEx, "Fallback translation was cancelled");
+                throw;
+            }
+            catch (Exception fallbackEx)
+            {
+                _logger.LogError(fallbackEx, "Fallback translation failed with unexpected error");
+                throw;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Sends translation request to Azure Translator API using specified API key
+    /// </summary>
+    /// <param name="text">Text to translate</param>
+    /// <param name="targetLanguage">Target language code</param>
+    /// <param name="sourceLanguage">Optional source language code</param>
+    /// <param name="apiKey">Azure Translator API key to use</param>
+    /// <param name="accountDescription">Account identifier for logging (e.g., "primary account")</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Translated text</returns>
+    /// <exception cref="HttpRequestException">Thrown when API request fails</exception>
+    /// <exception cref="InvalidOperationException">Thrown when API returns empty result</exception>
+    private async Task<string> SendTranslationRequestAsync(
+        string text,
+        string targetLanguage,
+        string? sourceLanguage,
+        string apiKey,
+        string accountDescription,
+        CancellationToken cancellationToken)
+    {
         // Build request URL
         var route = $"/translate?api-version=3.0&to={targetLanguage}";
         if (!string.IsNullOrEmpty(sourceLanguage))
@@ -62,26 +158,48 @@ public class AzureTranslatorService : IAzureTranslatorService
             route += $"&from={sourceLanguage}";
         }
 
+        // Build request
+        using var request = new HttpRequestMessage(HttpMethod.Post, route);
+
+        // Set headers per-request (not in constructor) to support different API keys
+        request.Headers.Add("Ocp-Apim-Subscription-Key", apiKey);
+        request.Headers.Add("Ocp-Apim-Subscription-Region", _options.Region);
+
         // Build request body
         var requestBody = new[] { new { Text = text } };
-        using var content = new StringContent(
+        request.Content = new StringContent(
             JsonSerializer.Serialize(requestBody),
             Encoding.UTF8,
             "application/json");
 
         // Send request
-        var response = await _httpClient.PostAsync(route, content, cancellationToken);
+        var response = await _httpClient.SendAsync(request, cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
             var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            // Log Retry-After header if present (429 errors)
+            if (response.StatusCode == (HttpStatusCode)429 &&
+                response.Headers.TryGetValues("Retry-After", out var retryAfterValues))
+            {
+                var retryAfter = retryAfterValues.First();
+                _logger.LogWarning(
+                    "Rate limited ({Account}). Retry after: {RetryAfter} seconds",
+                    accountDescription, retryAfter);
+            }
+
+            // Try to parse Azure error response
+            var errorDetails = TryParseErrorDetails(errorContent);
+
             _logger.LogError(
-                "Translation failed: {StatusCode} - {Error}",
-                response.StatusCode,
-                errorContent);
+                "Translation failed ({Account}): {StatusCode} - Code: {ErrorCode}, Message: {ErrorMessage}",
+                accountDescription, response.StatusCode, errorDetails.Code, errorDetails.Message);
 
             throw new HttpRequestException(
-                $"Translation failed with status {response.StatusCode}: {errorContent}");
+                $"Translation failed ({accountDescription}) with status {response.StatusCode}: {errorDetails.Message}",
+                null,
+                response.StatusCode);
         }
 
         // Parse response
@@ -95,6 +213,44 @@ public class AzureTranslatorService : IAzureTranslatorService
         }
 
         return result[0].Translations[0].Text;
+    }
+
+    private static bool IsFallbackEligible(HttpRequestException ex)
+    {
+        var statusCode = ex.StatusCode;
+
+        // Fallback on:
+        // - 429 Too Many Requests (rate limit)
+        // - 403 Forbidden (quota exceeded)
+        // - 401 Unauthorized (invalid key)
+        return statusCode is HttpStatusCode.TooManyRequests or
+                             HttpStatusCode.Forbidden or
+                             HttpStatusCode.Unauthorized;
+    }
+
+    private static (int? Code, string Message) TryParseErrorDetails(string errorContent)
+    {
+        try
+        {
+            var error = JsonSerializer.Deserialize<AzureErrorResponse>(errorContent);
+            if (error?.Error != null)
+            {
+                return (error.Error.Code, error.Error.Message);
+            }
+        }
+        catch
+        {
+            // Parsing failed, return raw content
+        }
+
+        return (null, errorContent);
+    }
+
+    private static DateTime GetNextQuotaResetDate()
+    {
+        var now = DateTime.UtcNow;
+        // Quota resets on 1st of next month
+        return new DateTime(now.Year, now.Month, 1).AddMonths(1);
     }
 
     private static TimeSpan CalculateDelay(int characterCount)
@@ -116,5 +272,16 @@ public class AzureTranslatorService : IAzureTranslatorService
     {
         public required string Text { get; set; }
         public required string To { get; set; }
+    }
+
+    private class AzureErrorResponse
+    {
+        public required ErrorDetail Error { get; set; }
+    }
+
+    private class ErrorDetail
+    {
+        public int Code { get; set; }
+        public required string Message { get; set; }
     }
 }

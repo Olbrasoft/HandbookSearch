@@ -8,9 +8,14 @@ public class AzureTranslatorOptions
     public const string SectionName = "AzureTranslator";
 
     /// <summary>
-    /// Azure Translator API key
+    /// Azure Translator API key (primary account)
     /// </summary>
     public required string ApiKey { get; set; }
+
+    /// <summary>
+    /// Fallback Azure Translator API key (optional, used when primary fails)
+    /// </summary>
+    public string? FallbackApiKey { get; set; }
 
     /// <summary>
     /// Azure region (e.g., "westeurope")
