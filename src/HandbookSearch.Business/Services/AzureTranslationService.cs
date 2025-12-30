@@ -148,8 +148,6 @@ public class AzureTranslationService : ITranslationService
                 "Primary account failed with {StatusCode}. Retrying with fallback account...",
                 ex.StatusCode);
 
-            _logger.LogInformation("Retrying with fallback account");
-
             // Try fallback API key
             try
             {
@@ -258,8 +256,8 @@ public class AzureTranslationService : ITranslationService
 
         // Parse response
         var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
-        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-        var result = JsonSerializer.Deserialize<TranslationResponse[]>(responseContent, options);
+        var jsonOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        var result = JsonSerializer.Deserialize<TranslationResponse[]>(responseContent, jsonOptions);
 
         if (result == null || result.Length == 0 || result[0].Translations.Length == 0)
         {
@@ -288,7 +286,7 @@ public class AzureTranslationService : ITranslationService
     /// <summary>
     /// Attempts to parse Azure error response JSON
     /// </summary>
-    private static (int? Code, string Message) TryParseErrorDetails(string errorContent)
+    private (int? Code, string Message) TryParseErrorDetails(string errorContent)
     {
         try
         {
@@ -298,9 +296,10 @@ public class AzureTranslationService : ITranslationService
                 return (error.Error.Code, error.Error.Message);
             }
         }
-        catch
+        catch (Exception ex)
         {
             // Parsing failed, return raw content
+            _logger.LogDebug(ex, "Failed to parse Azure error response JSON. Using raw content instead.");
         }
 
         return (null, errorContent);

@@ -65,7 +65,10 @@ public class AzureTranslationServiceTests
                 };
             });
 
-        var httpClient = new HttpClient(handlerMock.Object);
+        var httpClient = new HttpClient(handlerMock.Object)
+        {
+            BaseAddress = new Uri("https://api.cognitive.microsofttranslator.com")
+        };
         var service = new AzureTranslationService(httpClient, options, mockLogger.Object);
 
         // Act
@@ -130,7 +133,10 @@ public class AzureTranslationServiceTests
                 };
             });
 
-        var httpClient = new HttpClient(handlerMock.Object);
+        var httpClient = new HttpClient(handlerMock.Object)
+        {
+            BaseAddress = new Uri("https://api.cognitive.microsofttranslator.com")
+        };
         var service = new AzureTranslationService(httpClient, options, mockLogger.Object);
 
         // Act
@@ -195,7 +201,10 @@ public class AzureTranslationServiceTests
                 };
             });
 
-        var httpClient = new HttpClient(handlerMock.Object);
+        var httpClient = new HttpClient(handlerMock.Object)
+        {
+            BaseAddress = new Uri("https://api.cognitive.microsofttranslator.com")
+        };
         var service = new AzureTranslationService(httpClient, options, mockLogger.Object);
 
         // Act
