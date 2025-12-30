@@ -1,4 +1,4 @@
-name: Build and Test
+name: Build, Test and Deploy
 
 on:
   push:
@@ -26,3 +26,22 @@ jobs:
 
     - name: Test
       run: dotnet test --no-build --configuration Release --verbosity normal --filter "FullyQualifiedName!~IntegrationTests"
+
+  deploy:
+    needs: build
+    runs-on: [self-hosted, handbook-search]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET environment
+      run: |
+        echo "PATH=/home/jirka/.dotnet:$PATH" >> $GITHUB_ENV
+        echo "DOTNET_ROOT=/home/jirka/.dotnet" >> $GITHUB_ENV
+
+    - name: Deploy to production
+      working-directory: ${{ github.workspace }}
+      run: |
+        chmod +x ./deploy/deploy.sh
+        ./deploy/deploy.sh
