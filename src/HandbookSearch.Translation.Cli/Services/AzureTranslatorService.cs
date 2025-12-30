@@ -58,6 +58,15 @@ public class AzureTranslatorService : IAzureTranslatorService
         return await TranslateWithFallbackAsync(text, targetLanguage, sourceLanguage, cancellationToken);
     }
 
+    /// <summary>
+    /// Translates text with automatic fallback to secondary API key on failure
+    /// </summary>
+    /// <param name="text">Text to translate</param>
+    /// <param name="targetLanguage">Target language code</param>
+    /// <param name="sourceLanguage">Optional source language code</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Translated text</returns>
+    /// <exception cref="HttpRequestException">Thrown when both primary and fallback accounts fail</exception>
     private async Task<string> TranslateWithFallbackAsync(
         string text,
         string targetLanguage,
@@ -69,7 +78,7 @@ public class AzureTranslatorService : IAzureTranslatorService
         {
             return await SendTranslationRequestAsync(
                 text, targetLanguage, sourceLanguage,
-                _options.ApiKey, "primary (olbrasoft@gmail.com)", cancellationToken);
+                _options.ApiKey, "primary account", cancellationToken);
         }
         catch (HttpRequestException ex) when (IsFallbackEligible(ex))
         {
@@ -85,14 +94,14 @@ public class AzureTranslatorService : IAzureTranslatorService
                 "Primary account failed with {StatusCode}. Retrying with fallback account...",
                 ex.StatusCode);
 
-            _logger.LogInformation("Retrying with fallback account (virtualniassistent@email.cz)");
+            _logger.LogInformation("Retrying with fallback account");
 
             // Try fallback API key
             try
             {
                 var result = await SendTranslationRequestAsync(
                     text, targetLanguage, sourceLanguage,
-                    _options.FallbackApiKey, "fallback (virtualniassistent@email.cz)", cancellationToken);
+                    _options.FallbackApiKey, "fallback account", cancellationToken);
 
                 _logger.LogInformation("Translation completed successfully using fallback account");
                 return result;
@@ -109,9 +118,31 @@ public class AzureTranslatorService : IAzureTranslatorService
                     $"Fallback ({fallbackEx.StatusCode}): {fallbackEx.Message}. " +
                     $"Quota resets on {nextReset:yyyy-MM-dd}.", fallbackEx);
             }
+            catch (Exception fallbackEx) when (fallbackEx is TaskCanceledException or OperationCanceledException)
+            {
+                _logger.LogWarning(fallbackEx, "Fallback translation was cancelled");
+                throw;
+            }
+            catch (Exception fallbackEx)
+            {
+                _logger.LogError(fallbackEx, "Fallback translation failed with unexpected error");
+                throw;
+            }
         }
     }
 
+    /// <summary>
+    /// Sends translation request to Azure Translator API using specified API key
+    /// </summary>
+    /// <param name="text">Text to translate</param>
+    /// <param name="targetLanguage">Target language code</param>
+    /// <param name="sourceLanguage">Optional source language code</param>
+    /// <param name="apiKey">Azure Translator API key to use</param>
+    /// <param name="accountDescription">Account identifier for logging (e.g., "primary account")</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Translated text</returns>
+    /// <exception cref="HttpRequestException">Thrown when API request fails</exception>
+    /// <exception cref="InvalidOperationException">Thrown when API returns empty result</exception>
     private async Task<string> SendTranslationRequestAsync(
         string text,
         string targetLanguage,
