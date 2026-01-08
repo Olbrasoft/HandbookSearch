@@ -13,8 +13,8 @@ builder.Configuration.AddSecureStore();
 // Configuration
 builder.Services.Configure<OllamaOptions>(builder.Configuration.GetSection("Ollama"));
 
-// Database - build connection string from parts (password from SecureStore)
-var connectionString = BuildConnectionString(builder.Configuration.GetSection("Database"));
+// Database - build connection string from parts (password from SecureStore if configured)
+var connectionString = DatabaseConfigurationHelper.BuildConnectionString(builder.Configuration.GetSection("Database"));
 builder.Services.AddDbContext<HandbookSearchDbContext>(options =>
     options.UseNpgsql(connectionString, o => o.UseVector()));
 
@@ -115,25 +115,6 @@ app.MapGet("/api/search", async (
 .Produces<object>(500);
 
 app.Run();
-
-/// <summary>
-/// Builds a PostgreSQL connection string from configuration section.
-/// Password is expected from SecureStore (Database:Password key).
-/// </summary>
-static string BuildConnectionString(IConfigurationSection dbConfig)
-{
-    var host = dbConfig["Host"] ?? "localhost";
-    var database = dbConfig["Name"] ?? "handbook_search";
-    var username = dbConfig["Username"] ?? "postgres";
-    var password = dbConfig["Password"]; // From SecureStore
-
-    var connStr = $"Host={host};Database={database};Username={username}";
-    if (!string.IsNullOrEmpty(password))
-    {
-        connStr += $";Password={password}";
-    }
-    return connStr;
-}
 
 // Make Program class available to integration tests
 public partial class Program { }
