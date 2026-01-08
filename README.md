@@ -139,7 +139,7 @@ HandbookSearch uses [SecureStore](https://github.com/neosmart/SecureStore) for e
 | `AzureTranslator:ApiKey` | Azure Translator API key | For Czech embeddings |
 | `AzureTranslator:FallbackApiKey` | Fallback API key | Optional |
 
-**Note:** Local PostgreSQL typically runs without password. Only set `Database:Password` if your setup requires authentication.
+**Note:** Local PostgreSQL typically runs without a password. Only set `Database:Password` if your setup requires authentication.
 
 ### Import Handbook Documents
 

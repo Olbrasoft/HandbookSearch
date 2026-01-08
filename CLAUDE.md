@@ -88,6 +88,7 @@ SecureStore set -s ~/.config/handbook-search/secrets/secrets.json \
 |--------|-------------|
 | `Database:Password` | PostgreSQL password (production only) |
 | `AzureTranslator:ApiKey` | Azure Translator API key |
+| `AzureTranslator:FallbackApiKey` | Azure Translator fallback API key |
 
 ## Code Style
 

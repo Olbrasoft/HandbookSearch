@@ -12,7 +12,7 @@ Instructions for AI agents (Claude Code, GitHub Copilot, etc.) working with Hand
 - .NET 10
 - ASP.NET Core (Minimal API)
 - PostgreSQL 16+ with pgvector extension
-- Ollama with qwen3-embedding (1024-dimensional embeddings)
+- Ollama with qwen3-embedding:0.6b (1024-dimensional embeddings)
 - Entity Framework Core 10
 - xUnit + Moq for testing
 
@@ -180,7 +180,7 @@ SecureStore set -s $SECRETS -k $KEY "AzureTranslator:ApiKey=your_api_key"
 | `AzureTranslator:ApiKey` | Azure Translator API key | For Czech embeddings |
 | `AzureTranslator:FallbackApiKey` | Fallback API key | Optional |
 
-**Note:** Local PostgreSQL runs without password. Only set `Database:Password` if your setup requires authentication.
+**Note:** Local PostgreSQL runs without a password. Only set `Database:Password` if your setup requires authentication.
 
 ## Database
 
@@ -301,5 +301,5 @@ See [CI/CD Guide](https://github.com/Olbrasoft/engineering-handbook/blob/main/de
 - All secrets stored in **SecureStore** encrypted vault (`~/.config/handbook-search/secrets/`)
 - Never commit keyfiles, `.env` files, or `appsettings.*.local.json`
 - Self-hosted runner required for deployment (needs local PostgreSQL + Ollama)
-- Embedding dimension is **1024** (qwen3-embedding model)
+- Embedding dimension is **1024** (qwen3-embedding:0.6b model)
 - Use cosine distance for similarity search (`CosineDistance()` in EF Core)
