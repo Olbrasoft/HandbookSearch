@@ -96,30 +96,50 @@ cd src/HandbookSearch.Data.EntityFrameworkCore
 dotnet ef database update
 ```
 
-### Configuration
+### Secrets Management
 
-**Local Development** - Use User Secrets:
+HandbookSearch uses [SecureStore](https://github.com/neosmart/SecureStore) for encrypted secrets storage.
 
-```bash
-cd src/HandbookSearch.Cli
-dotnet user-secrets init
-dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Database=handbook_search;Username=postgres"
-dotnet user-secrets set "Ollama:BaseUrl" "http://localhost:11434"
-dotnet user-secrets set "Ollama:Model" "nomic-embed-text"
-```
+#### Initial Setup
 
-**Note:** Local PostgreSQL runs without password. If your setup requires a password, add `;Password=YourPassword` to the connection string.
+1. Install SecureStore CLI:
+   ```bash
+   dotnet tool install --global SecureStore.Client
+   ```
 
-**Production** - Use environment variables:
+2. Create vault and keyfile:
+   ```bash
+   mkdir -p ~/.config/handbook-search/secrets
+   mkdir -p ~/.config/handbook-search/keys
 
-Copy `handbook-search.env.example` to `~/.config/systemd/user/handbook-search.env` and configure:
+   SecureStore create \
+     -s ~/.config/handbook-search/secrets/secrets.json \
+     -k ~/.config/handbook-search/keys/secrets.key
 
-```bash
-cp handbook-search.env.example ~/.config/systemd/user/handbook-search.env
-# Edit the file with your production values
-```
+   chmod 600 ~/.config/handbook-search/keys/secrets.key
+   ```
 
-See [Secrets Management Guide](https://github.com/Olbrasoft/engineering-handbook/blob/main/development-guidelines/secrets-management.md) for details.
+3. Add secrets:
+   ```bash
+   SECRETS=~/.config/handbook-search/secrets/secrets.json
+   KEY=~/.config/handbook-search/keys/secrets.key
+
+   # Database password (if needed for production)
+   SecureStore set -s $SECRETS -k $KEY "Database:Password=your_password"
+
+   # Azure Translator (for Czech embeddings)
+   SecureStore set -s $SECRETS -k $KEY "AzureTranslator:ApiKey=your_api_key"
+   ```
+
+#### Secrets Reference
+
+| Secret | Description | Required |
+|--------|-------------|----------|
+| `Database:Password` | PostgreSQL password | Production only |
+| `AzureTranslator:ApiKey` | Azure Translator API key | For Czech embeddings |
+| `AzureTranslator:FallbackApiKey` | Fallback API key | Optional |
+
+**Note:** Local PostgreSQL typically runs without password. Only set `Database:Password` if your setup requires authentication.
 
 ### Import Handbook Documents
 
