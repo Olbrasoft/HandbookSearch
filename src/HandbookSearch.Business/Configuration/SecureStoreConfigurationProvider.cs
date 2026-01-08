@@ -94,12 +94,18 @@ public class SecureStoreConfigurationSource : IConfigurationSource
 public static class SecureStoreConfigurationExtensions
 {
     /// <summary>
-    /// Default path to secrets vault file.
+    /// Default path to the SecureStore secrets vault file (encrypted secrets.json).
+    /// The vault is stored under a dedicated <c>secrets/</c> directory and is kept
+    /// separate from the encryption key directory to avoid co-locating encrypted data
+    /// and decryption material in the same path.
     /// </summary>
     public const string DefaultSecretsPath = "~/.config/handbook-search/secrets/secrets.json";
 
     /// <summary>
-    /// Default path to encryption key file.
+    /// Default path to the encryption key file used to decrypt the SecureStore vault.
+    /// The key is stored under a separate <c>keys/</c> directory so that filesystem
+    /// permissions, backup policies, and operational handling can differ from the
+    /// encrypted vault itself, following the principle of separation of concerns.
     /// </summary>
     public const string DefaultKeyPath = "~/.config/handbook-search/keys/secrets.key";
 
@@ -109,8 +115,10 @@ public static class SecureStoreConfigurationExtensions
     /// </summary>
     /// <param name="builder">Configuration builder.</param>
     /// <returns>The configuration builder for chaining.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when builder is null.</exception>
     public static IConfigurationBuilder AddSecureStore(this IConfigurationBuilder builder)
     {
+        ArgumentNullException.ThrowIfNull(builder);
         return builder.AddSecureStore(DefaultSecretsPath, DefaultKeyPath);
     }
 
@@ -122,11 +130,14 @@ public static class SecureStoreConfigurationExtensions
     /// <param name="secretsPath">Path to secrets.json vault file.</param>
     /// <param name="keyPath">Path to secrets.key file.</param>
     /// <returns>The configuration builder for chaining.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when builder is null.</exception>
     public static IConfigurationBuilder AddSecureStore(
         this IConfigurationBuilder builder,
         string secretsPath,
         string keyPath)
     {
+        ArgumentNullException.ThrowIfNull(builder);
+
         // Expand ~ to home directory
         secretsPath = ExpandPath(secretsPath);
         keyPath = ExpandPath(keyPath);
@@ -140,6 +151,7 @@ public static class SecureStoreConfigurationExtensions
 
     /// <summary>
     /// Expands tilde (~) in path to user's home directory.
+    /// Supports both Unix-style (/) and Windows-style (\) path separators.
     /// </summary>
     /// <param name="path">Path that may contain tilde prefix.</param>
     /// <returns>Expanded path.</returns>
@@ -156,14 +168,14 @@ public static class SecureStoreConfigurationExtensions
             return Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         }
 
-        // Handle "~/..." - home directory with relative path
-        if (path.StartsWith("~/"))
+        // Handle "~/" or "~\" - home directory with relative path (cross-platform)
+        if (path.Length >= 2 && path[0] == '~' && (path[1] == '/' || path[1] == '\\'))
         {
             var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            return Path.Combine(home, path.Substring(2)); // Skip "~/"
+            return Path.Combine(home, path.Substring(2)); // Skip "~/" or "~\"
         }
 
-        // Path doesn't start with ~/ - return as-is
+        // Path doesn't start with ~/ or ~\ - return as-is
         // Note: ~username paths are not supported (Unix-specific, rarely used in .NET)
         return path;
     }
