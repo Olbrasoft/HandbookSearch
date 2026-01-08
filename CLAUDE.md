@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 ## Overview
 
 HandbookSearch - Semantic search for engineering-handbook using embeddings and PostgreSQL pgvector.
@@ -7,75 +9,105 @@ HandbookSearch - Semantic search for engineering-handbook using embeddings and P
 ## Build & Test
 
 ```bash
-cd ~/Olbrasoft/HandbookSearch
 dotnet build
 dotnet test
+
+# Run specific test project
+dotnet test tests/HandbookSearch.Business.Tests
+
+# Run single test method
+dotnet test --filter "FullyQualifiedName~GenerateEmbeddingAsync_ValidText_ReturnsEmbedding"
+
+# Run all tests in a class
+dotnet test --filter "FullyQualifiedName~EmbeddingServiceTests"
 ```
 
 ## Deployment
 
-Deploy CLI to `/opt/olbrasoft/handbook-search/`:
-
 ```bash
-cd ~/Olbrasoft/HandbookSearch
 ./deploy/deploy.sh
 ```
 
-Deployed structure:
-```
-/opt/olbrasoft/handbook-search/
-├── cli/              # Compiled CLI binaries
-│   ├── HandbookSearch.Cli
-│   └── appsettings.json
-└── logs/             # Application logs
+Deploys CLI to `/opt/olbrasoft/handbook-search/cli/`. The script builds, tests, and publishes.
+
+## CLI Commands
+
+```bash
+# Development (from project directory)
+cd src/HandbookSearch.Cli
+dotnet run -- import-all --path ~/GitHub/Olbrasoft/engineering-handbook
+dotnet run -- import-files --files "workflow/git-workflow.md,testing/unit-testing.md" --translate-cs
+dotnet run -- delete-files --files "path.md"
+
+# Production (deployed)
+/opt/olbrasoft/handbook-search/cli/HandbookSearch.Cli import-files --files "path.md" --translate-cs
 ```
 
-CLI usage from deployed location:
+## Run API
+
 ```bash
-/opt/olbrasoft/handbook-search/cli/HandbookSearch.Cli import-files --files "path.md" --translate-cs
-/opt/olbrasoft/handbook-search/cli/HandbookSearch.Cli delete-files --files "path.md"
+cd src/HandbookSearch.AspNetCore.Api
+dotnet run
+# Swagger UI: http://localhost:5000/swagger
 ```
 
 ## Architecture
 
-3-tier architecture following Olbrasoft conventions:
-
-| Layer | Project | Purpose |
-|-------|---------|---------|
-| API | HandbookSearch.AspNetCore.Api | Search endpoint, Swagger |
-| Web UI | HandbookSearch.Web | Simple HTML/JS search interface |
-| Data | HandbookSearch.Data | Entities, DTOs, interfaces |
-| Data (EF) | HandbookSearch.Data.EntityFrameworkCore | DbContext, migrations, pgvector |
-| Business | HandbookSearch.Business | Services (Import, Search, Embedding) |
-| CLI | HandbookSearch.Cli | Command-line import tool |
+```
+API (HandbookSearch.AspNetCore.Api) - Minimal API, port 5000
+    |
+Business (HandbookSearch.Business) - Services: Embedding, Search, DocumentImport, AzureTranslation
+    |
+Data (HandbookSearch.Data + Data.EntityFrameworkCore) - Document entity, DbContext, pgvector
+    |
+PostgreSQL with pgvector extension
+```
 
 ## Dependencies
 
-- PostgreSQL with pgvector extension
-- Ollama (localhost:11434) with nomic-embed-text model
+- PostgreSQL 16+ with pgvector extension
+- Ollama (localhost:11434) with `qwen3-embedding:0.6b` model (1024 dimensions)
+- Azure Translator (optional, for `--translate-cs` flag)
 
-## Project Structure
+## Secrets Management
 
-```
-HandbookSearch/
-├── src/
-│   ├── HandbookSearch.Data/
-│   │   └── Entities/
-│   ├── HandbookSearch.Data.EntityFrameworkCore/
-│   │   └── Configurations/
-│   ├── HandbookSearch.Business/
-│   │   └── Services/
-│   └── HandbookSearch.Cli/
-├── tests/
-│   ├── HandbookSearch.Data.Tests/
-│   └── HandbookSearch.Business.Tests/
-└── HandbookSearch.sln
+Uses SecureStore for encrypted secrets:
+
+```bash
+# Vault location
+~/.config/handbook-search/secrets/secrets.json
+~/.config/handbook-search/keys/secrets.key
+
+# Add secrets
+SecureStore set -s ~/.config/handbook-search/secrets/secrets.json \
+  -k ~/.config/handbook-search/keys/secrets.key \
+  "Database:Password=your_password"
 ```
 
-## Namespaces
+| Secret | Description |
+|--------|-------------|
+| `Database:Password` | PostgreSQL password (production only) |
+| `AzureTranslator:ApiKey` | Azure Translator API key |
 
-All namespaces use `Olbrasoft.` prefix:
-- `Olbrasoft.HandbookSearch.Data`
-- `Olbrasoft.HandbookSearch.Data.EntityFrameworkCore`
-- `Olbrasoft.HandbookSearch.Business`
-- `Olbrasoft.HandbookSearch.Cli`
+## Code Style
+
+- **Namespace prefix:** `Olbrasoft.HandbookSearch.*`
+- **File-scoped namespaces:** `namespace Olbrasoft.HandbookSearch.Business.Services;`
+- **Testing:** xUnit + Moq (NOT NUnit/NSubstitute)
+- **Database columns:** snake_case naming
+- **Embeddings:** 1024 dimensions, use `CosineDistance()` for similarity
+- **Async methods:** suffix with `Async`, accept `CancellationToken`
+
+## Database & Migrations
+
+```bash
+cd src/HandbookSearch.Data.EntityFrameworkCore
+dotnet ef migrations add MigrationName
+dotnet ef database update
+```
+
+## CI/CD
+
+GitHub Actions workflow (`.github/workflows/build.yml`):
+- **Build job:** Runs on `ubuntu-latest`, builds and tests (excludes IntegrationTests)
+- **Deploy job:** Runs on self-hosted `handbook-search` runner, executes `deploy/deploy.sh`

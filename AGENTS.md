@@ -12,7 +12,7 @@ Instructions for AI agents (Claude Code, GitHub Copilot, etc.) working with Hand
 - .NET 10
 - ASP.NET Core (Minimal API)
 - PostgreSQL 16+ with pgvector extension
-- Ollama with nomic-embed-text (768-dimensional embeddings)
+- Ollama with qwen3-embedding (1024-dimensional embeddings)
 - Entity Framework Core 10
 - xUnit + Moq for testing
 
@@ -75,7 +75,8 @@ dotnet run
 ### Configuration
 - `src/HandbookSearch.Cli/appsettings.json` - CLI configuration (no secrets)
 - `src/HandbookSearch.AspNetCore.Api/appsettings.json` - API configuration (no secrets)
-- `~/.microsoft/usersecrets/<id>/secrets.json` - User Secrets (local development)
+- `~/.config/handbook-search/secrets/secrets.json` - SecureStore encrypted vault
+- `~/.config/handbook-search/keys/secrets.key` - SecureStore encryption key
 
 ## Namespaces
 
@@ -148,40 +149,38 @@ See [SOLID Principles](https://github.com/Olbrasoft/engineering-handbook/blob/ma
 
 **NEVER commit secrets to Git!**
 
-### Development (User Secrets)
+HandbookSearch uses [SecureStore](https://github.com/neosmart/SecureStore) for encrypted secrets storage.
+
+### SecureStore Setup
 
 ```bash
-dotnet user-secrets init
-dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Database=handbook_search;Username=postgres"
-dotnet user-secrets set "Ollama:BaseUrl" "http://localhost:11434"
-dotnet user-secrets set "Ollama:Model" "nomic-embed-text"
+# Install SecureStore CLI
+dotnet tool install --global SecureStore.Client
+
+# Create vault
+mkdir -p ~/.config/handbook-search/{secrets,keys}
+SecureStore create \
+  -s ~/.config/handbook-search/secrets/secrets.json \
+  -k ~/.config/handbook-search/keys/secrets.key
+chmod 600 ~/.config/handbook-search/keys/secrets.key
+
+# Add secrets
+SECRETS=~/.config/handbook-search/secrets/secrets.json
+KEY=~/.config/handbook-search/keys/secrets.key
+
+SecureStore set -s $SECRETS -k $KEY "Database:Password=your_password"
+SecureStore set -s $SECRETS -k $KEY "AzureTranslator:ApiKey=your_api_key"
 ```
 
-**Note:** Local PostgreSQL runs without password. Add `;Password=YourPassword` only if your setup requires it.
+### Secrets Reference
 
-### Production (Environment Variables)
+| Secret | Description | Required |
+|--------|-------------|----------|
+| `Database:Password` | PostgreSQL password | Production only |
+| `AzureTranslator:ApiKey` | Azure Translator API key | For Czech embeddings |
+| `AzureTranslator:FallbackApiKey` | Fallback API key | Optional |
 
-Use `handbook-search.env.example` as template:
-
-```bash
-cp handbook-search.env.example ~/.config/systemd/user/handbook-search.env
-```
-
-Example content:
-```bash
-ConnectionStrings__DefaultConnection=Host=localhost;Database=handbook_search;Username=postgres
-Ollama__BaseUrl=http://localhost:11434
-Ollama__Model=nomic-embed-text
-```
-
-### GitHub Actions (Secrets)
-
-Repository secrets (for CI/CD with self-hosted runner):
-- `OLLAMA_BASE_URL` - Ollama API URL (http://localhost:11434)
-
-**Note:** No PostgreSQL password needed for local development environment.
-
-See [Secrets Management Guide](https://github.com/Olbrasoft/engineering-handbook/blob/main/development-guidelines/secrets-management.md)
+**Note:** Local PostgreSQL runs without password. Only set `Database:Password` if your setup requires authentication.
 
 ## Database
 
@@ -218,7 +217,7 @@ dotnet ef migrations script
 Document entity uses `Vector` type for embeddings:
 
 ```csharp
-[Column(TypeName = "vector(768)")]
+[Column(TypeName = "vector(1024)")]
 public Vector? Embedding { get; set; }
 ```
 
@@ -299,8 +298,8 @@ See [CI/CD Guide](https://github.com/Olbrasoft/engineering-handbook/blob/main/de
 
 - This project follows Olbrasoft conventions from engineering-handbook
 - Use **xUnit + Moq** for testing (NOT NUnit/NSubstitute)
-- All configuration secrets go in User Secrets or Environment Variables
-- Never commit `appsettings.*.local.json` or `.env` files
+- All secrets stored in **SecureStore** encrypted vault (`~/.config/handbook-search/secrets/`)
+- Never commit keyfiles, `.env` files, or `appsettings.*.local.json`
 - Self-hosted runner required for deployment (needs local PostgreSQL + Ollama)
-- Embedding dimension is 768 (nomic-embed-text model)
+- Embedding dimension is **1024** (qwen3-embedding model)
 - Use cosine distance for similarity search (`CosineDistance()` in EF Core)

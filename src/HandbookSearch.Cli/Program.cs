@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Olbrasoft.HandbookSearch.Business;
+using Olbrasoft.HandbookSearch.Business.Configuration;
 using Olbrasoft.HandbookSearch.Business.Services;
 using Olbrasoft.HandbookSearch.Data.EntityFrameworkCore;
 
@@ -197,6 +198,7 @@ static IHostBuilder CreateHostBuilder() =>
         .ConfigureAppConfiguration((context, config) =>
         {
             config.AddJsonFile("appsettings.json", optional: false);
+            config.AddSecureStore(); // Add SecureStore for encrypted secrets
             config.AddEnvironmentVariables();
         })
         .ConfigureServices((context, services) =>
@@ -205,8 +207,8 @@ static IHostBuilder CreateHostBuilder() =>
             services.Configure<OllamaOptions>(context.Configuration.GetSection("Ollama"));
             services.Configure<AzureTranslatorOptions>(context.Configuration.GetSection("AzureTranslator"));
 
-            // Database
-            var connectionString = context.Configuration.GetConnectionString("DefaultConnection");
+            // Database - build connection string from parts (password from SecureStore)
+            var connectionString = BuildConnectionString(context.Configuration.GetSection("Database"));
             services.AddDbContext<HandbookSearchDbContext>(options =>
                 options.UseNpgsql(connectionString, o => o.UseVector()));
 
@@ -218,3 +220,22 @@ static IHostBuilder CreateHostBuilder() =>
             services.AddScoped<IDocumentImportService, DocumentImportService>();
             services.AddScoped<ISearchService, SearchService>();
         });
+
+/// <summary>
+/// Builds a PostgreSQL connection string from configuration section.
+/// Password is expected from SecureStore (Database:Password key).
+/// </summary>
+static string BuildConnectionString(IConfigurationSection dbConfig)
+{
+    var host = dbConfig["Host"] ?? "localhost";
+    var database = dbConfig["Name"] ?? "handbook_search";
+    var username = dbConfig["Username"] ?? "postgres";
+    var password = dbConfig["Password"]; // From SecureStore
+
+    var connStr = $"Host={host};Database={database};Username={username}";
+    if (!string.IsNullOrEmpty(password))
+    {
+        connStr += $";Password={password}";
+    }
+    return connStr;
+}
