@@ -1,16 +1,20 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using Olbrasoft.HandbookSearch.Business;
+using Olbrasoft.HandbookSearch.Business.Configuration;
 using Olbrasoft.HandbookSearch.Business.Services;
 using Olbrasoft.HandbookSearch.Data.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Add SecureStore configuration for encrypted secrets
+builder.Configuration.AddSecureStore();
+
 // Configuration
 builder.Services.Configure<OllamaOptions>(builder.Configuration.GetSection("Ollama"));
 
-// Database
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+// Database - build connection string from parts (password from SecureStore if configured)
+var connectionString = DatabaseConfigurationHelper.BuildConnectionString(builder.Configuration.GetSection("Database"));
 builder.Services.AddDbContext<HandbookSearchDbContext>(options =>
     options.UseNpgsql(connectionString, o => o.UseVector()));
 
