@@ -40,6 +40,16 @@ jobs:
         echo "PATH=/home/jirka/.dotnet:$PATH" >> $GITHUB_ENV
         echo "DOTNET_ROOT=/home/jirka/.dotnet" >> $GITHUB_ENV
 
+    - name: Check SecureStore configuration
+      run: |
+        SECRETS_FILE=~/.config/handbook-search/secrets/secrets.json
+        if [ ! -f "$SECRETS_FILE" ]; then
+          echo "::warning::SecureStore vault not found at $SECRETS_FILE"
+          echo "Application will start but may fail if secrets are required."
+        else
+          echo "SecureStore vault found at $SECRETS_FILE"
+        fi
+
     - name: Deploy to production
       working-directory: ${{ github.workspace }}
       run: |
