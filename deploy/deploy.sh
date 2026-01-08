@@ -42,11 +42,29 @@ if [ ! -d "$KEYS_DIR" ]; then
     echo "📁 Created keys directory: $KEYS_DIR"
 fi
 
-# Check SecureStore vault
+# Check SecureStore vault and key
+VAULT_MISSING=false
+KEY_MISSING=false
+
 if [ ! -f "$SECRETS_DIR/secrets.json" ]; then
+    VAULT_MISSING=true
+fi
+
+if [ ! -f "$KEYS_DIR/secrets.key" ]; then
+    KEY_MISSING=true
+fi
+
+if [ "$VAULT_MISSING" = true ] || [ "$KEY_MISSING" = true ]; then
     echo ""
-    echo "⚠️  WARNING: SecureStore vault not found!"
-    echo "   Create it with:"
+    echo "⚠️  WARNING: SecureStore configuration incomplete!"
+    if [ "$VAULT_MISSING" = true ]; then
+        echo "   - Vault not found: $SECRETS_DIR/secrets.json"
+    fi
+    if [ "$KEY_MISSING" = true ]; then
+        echo "   - Key not found: $KEYS_DIR/secrets.key"
+    fi
+    echo ""
+    echo "   Create vault with:"
     echo "   SecureStore create -s $SECRETS_DIR/secrets.json -k $KEYS_DIR/secrets.key"
     echo ""
     echo "   Then add secrets:"

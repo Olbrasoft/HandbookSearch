@@ -43,11 +43,25 @@ jobs:
     - name: Check SecureStore configuration
       run: |
         SECRETS_FILE=~/.config/handbook-search/secrets/secrets.json
+        KEY_FILE=~/.config/handbook-search/keys/secrets.key
+        MISSING_FILES=false
+
         if [ ! -f "$SECRETS_FILE" ]; then
           echo "::warning::SecureStore vault not found at $SECRETS_FILE"
-          echo "Application will start but may fail if secrets are required."
+          MISSING_FILES=true
         else
           echo "SecureStore vault found at $SECRETS_FILE"
+        fi
+
+        if [ ! -f "$KEY_FILE" ]; then
+          echo "::warning::SecureStore key not found at $KEY_FILE"
+          MISSING_FILES=true
+        else
+          echo "SecureStore key found at $KEY_FILE"
+        fi
+
+        if [ "$MISSING_FILES" = true ]; then
+          echo "Application will start but may fail if secrets decryption is required."
         fi
 
     - name: Deploy to production

@@ -7,7 +7,7 @@ Instructions for setting up the self-hosted GitHub Actions runner for HandbookSe
 - Debian/Ubuntu Linux
 - .NET 10 SDK
 - PostgreSQL 16+ with pgvector extension
-- Ollama with qwen3-embedding model
+- Ollama with qwen3-embedding:0.6b model
 
 ## Runner Installation
 
@@ -58,7 +58,7 @@ ls -la ~/.config/handbook-search/secrets/secrets.json
 
 # Test CLI with secrets
 cd ~/Olbrasoft/HandbookSearch/src/HandbookSearch.Cli
-dotnet run -- import-all --path ~/GitHub/Olbrasoft/engineering-handbook
+dotnet run -- import-all --path ~/Olbrasoft/engineering-handbook
 ```
 
 ## Secrets Reference
