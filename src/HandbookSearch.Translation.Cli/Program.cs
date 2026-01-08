@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Olbrasoft.HandbookSearch.Business.Configuration;
 using Olbrasoft.HandbookSearch.Translation.Cli.Configuration;
 using Olbrasoft.HandbookSearch.Translation.Cli.Services;
 
@@ -229,7 +230,7 @@ static IHostBuilder CreateHostBuilder(string[] args) =>
         .ConfigureAppConfiguration((context, config) =>
         {
             config.AddJsonFile("appsettings.json", optional: false);
-            config.AddUserSecrets<Program>(optional: true);
+            config.AddSecureStore(); // Replaces User Secrets
             config.AddEnvironmentVariables();
         })
         .ConfigureServices((context, services) =>
