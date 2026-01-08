@@ -36,8 +36,19 @@ public class SecureStoreConfigurationProviderTests
         }
         finally
         {
-            // Cleanup
-            Directory.Delete(tempDir, true);
+            // Cleanup - ignore errors if deletion fails
+            try
+            {
+                Directory.Delete(tempDir, true);
+            }
+            catch (IOException)
+            {
+                // Ignore cleanup failures
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // Ignore cleanup failures
+            }
         }
     }
 
